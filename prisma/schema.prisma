@@ -1,0 +1,502 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  customer
+  assistant
+  admin
+}
+
+enum BookingStatus {
+  pending
+  searching
+  assigned
+  arriving
+  started
+  completed
+  cancelled
+}
+
+enum PaymentMethod {
+  cash
+  upi
+  wallet
+  gateway
+}
+
+enum PaymentStatus {
+  pending
+  completed
+  failed
+  refunded
+}
+
+enum WalletTransactionType {
+  credit
+  debit
+}
+
+enum ReferralStatus {
+  pending
+  completed
+}
+
+enum NotificationType {
+  new_booking
+  assistant_assigned
+  assistant_arriving
+  service_started
+  payment_completed
+  earnings_credited
+  booking_cancelled
+  general
+}
+
+enum PayoutRequestStatus {
+  pending
+  approved
+  rejected
+  paid
+}
+
+enum SupportTicketStatus {
+  open
+  in_progress
+  resolved
+  closed
+}
+
+enum PromoDiscountType {
+  fixed
+  percent
+}
+
+enum VerificationDocType {
+  profile_photo
+  full_address
+  aadhaar
+  pan
+  selfie
+  bank_details
+  security_photo_1
+  security_photo_2
+  security_photo_3
+  security_photo_4
+  security_photo_5
+}
+
+enum VerificationStatus {
+  not_submitted
+  pending
+  verified
+  rejected
+}
+
+model User {
+  id            String    @id @default(uuid())
+  phone         String?   @unique
+  email         String?   @unique
+  emailVerified Boolean   @default(false) @map("email_verified")
+  passwordHash  String?   @map("password_hash")
+  name        String?
+  avatarUrl   String?   @map("avatar_url")
+  roles       UserRole[]
+  activeRole  UserRole? @map("active_role")
+  isSuspended Boolean   @default(false) @map("is_suspended")
+  fcmToken    String?   @map("fcm_token")
+  referralCode String?  @unique @map("referral_code")
+  referredById String?  @map("referred_by_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  referredBy    User?  @relation("Referrals", fields: [referredById], references: [id])
+  referrals     User[] @relation("Referrals")
+  customerProfile  CustomerProfile?
+  assistantProfile AssistantProfile?
+  addresses     Address[]
+  bookingsAsCustomer Booking[] @relation("CustomerBookings")
+  bookingsAsAssistant Booking[] @relation("AssistantBookings")
+  wallet        Wallet?
+  notifications Notification[]
+  ratingsGiven  Rating[] @relation("RatingCustomer")
+  ratingsReceived Rating[] @relation("RatingAssistant")
+  appReviews    AppReview[]
+  availability  AssistantAvailability?
+  earnings      Earning[]
+  referralsMade Referral[] @relation("Referrer")
+  referralsReceived Referral[] @relation("Referee")
+  verificationDocuments AssistantVerificationDocument[]
+  bookingRejections BookingRejection[] @relation("BookingRejections")
+  payoutRequests PayoutRequest[]
+  supportTickets SupportTicket[]
+  chatMessages ChatMessage[]
+
+  @@map("users")
+}
+
+model CustomerProfile {
+  id        String   @id @default(uuid())
+  userId    String   @unique @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("customer_profiles")
+}
+
+model AssistantProfile {
+  id              String   @id @default(uuid())
+  userId          String   @unique @map("user_id")
+  assistantCode   String?  @unique @map("assistant_code")
+  rating          Float    @default(5.0)
+  totalJobs       Int      @default(0) @map("total_jobs")
+  aadhaarVerified Boolean  @default(false) @map("aadhaar_verified")
+  selfieVerified  Boolean  @default(false) @map("selfie_verified")
+  bankVerified    Boolean  @default(false) @map("bank_verified")
+  bankAccount     String?  @map("bank_account")
+  ifscCode        String?  @map("ifsc_code")
+  adminVerified   Boolean  @default(false) @map("admin_verified")
+  adminVerifiedAt DateTime? @map("admin_verified_at")
+  adminVerifiedBy String?  @map("admin_verified_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("assistant_profiles")
+}
+
+model AssistantVerificationDocument {
+  id         String               @id @default(uuid())
+  userId     String               @map("user_id")
+  type       VerificationDocType
+  status     VerificationStatus   @default(pending)
+  fileUrl    String?              @map("file_url")
+  textValue  String?              @map("text_value")
+  metadata   Json?
+  adminNote  String?              @map("admin_note")
+  uploadedAt DateTime?            @map("uploaded_at")
+  verifiedAt DateTime?            @map("verified_at")
+  verifiedBy String?              @map("verified_by")
+  createdAt  DateTime             @default(now()) @map("created_at")
+  updatedAt  DateTime             @updatedAt @map("updated_at")
+  user       User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type])
+  @@map("assistant_verification_documents")
+}
+
+model AssistantAvailability {
+  id        String   @id @default(uuid())
+  userId    String   @unique @map("user_id")
+  isOnline  Boolean  @default(false) @map("is_online")
+  lastLat   Float?   @map("last_lat")
+  lastLng   Float?   @map("last_lng")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("assistant_availability")
+}
+
+model Address {
+  id               String   @id @default(uuid())
+  userId           String   @map("user_id")
+  label            String
+  formattedAddress String   @map("formatted_address")
+  lat              Float
+  lng              Float
+  isDefault        Boolean  @default(false) @map("is_default")
+  createdAt        DateTime @default(now()) @map("created_at")
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("addresses")
+}
+
+model City {
+  id        String    @id @default(uuid())
+  name      String
+  state     String?
+  isActive  Boolean   @default(true) @map("is_active")
+  bookings  Booking[]
+
+  @@map("cities")
+}
+
+model ServiceCategory {
+  id          String    @id @default(uuid())
+  slug        String    @unique
+  name        String
+  description String?
+  icon        String?
+  baseRate    Float     @map("base_rate")
+  assistantPayoutPercent Float? @map("assistant_payout_percent")
+  isActive    Boolean   @default(true) @map("is_active")
+  bookings    Booking[]
+
+  @@map("service_categories")
+}
+
+model Booking {
+  id              String        @id @default(uuid())
+  customerId      String        @map("customer_id")
+  assistantId     String?       @map("assistant_id")
+  categoryId      String        @map("category_id")
+  cityId          String?       @map("city_id")
+  status          BookingStatus @default(pending)
+  durationMin     Int           @map("duration_min")
+  venueName       String        @map("venue_name")
+  scheduledAt     DateTime      @map("scheduled_at")
+  addressLabel    String        @map("address_label")
+  addressFormatted String       @map("address_formatted")
+  lat             Float
+  lng             Float
+  serviceFee      Float         @map("service_fee")
+  platformFee     Float         @map("platform_fee")
+  discountAmount  Float         @default(0) @map("discount_amount")
+  cancellationFee Float         @default(0) @map("cancellation_fee")
+  promoCodeId     String?       @map("promo_code_id")
+  totalAmount     Float         @map("total_amount")
+  serviceOtp      String?       @map("service_otp")
+  otpExpiresAt    DateTime?     @map("otp_expires_at")
+  dispatchRound   Int           @default(0) @map("dispatch_round")
+  notifiedAssistantIds String[] @default([]) @map("notified_assistant_ids")
+  offeredAssistantIds String[] @default([]) @map("offered_assistant_ids")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  customer  User            @relation("CustomerBookings", fields: [customerId], references: [id])
+  assistant User?           @relation("AssistantBookings", fields: [assistantId], references: [id])
+  category  ServiceCategory @relation(fields: [categoryId], references: [id])
+  city      City?           @relation(fields: [cityId], references: [id])
+  statusHistory BookingStatusHistory[]
+  payment   Payment?
+  rating    Rating?
+  appReview AppReview?
+  rejections BookingRejection[]
+  promoCode PromoCode? @relation(fields: [promoCodeId], references: [id])
+  chatMessages ChatMessage[]
+
+  @@map("bookings")
+}
+
+model BookingRejection {
+  id          String   @id @default(uuid())
+  bookingId   String   @map("booking_id")
+  assistantId String   @map("assistant_id")
+  reason      String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  assistant User    @relation("BookingRejections", fields: [assistantId], references: [id], onDelete: Cascade)
+
+  @@unique([bookingId, assistantId])
+  @@map("booking_rejections")
+}
+
+model BookingStatusHistory {
+  id        String        @id @default(uuid())
+  bookingId String        @map("booking_id")
+  status    BookingStatus
+  note      String?
+  createdAt DateTime      @default(now()) @map("created_at")
+  booking   Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@map("booking_status_history")
+}
+
+model Wallet {
+  id        String   @id @default(uuid())
+  userId    String   @unique @map("user_id")
+  balance   Float    @default(0)
+  updatedAt DateTime @updatedAt @map("updated_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions WalletTransaction[]
+
+  @@map("wallets")
+}
+
+model WalletTransaction {
+  id          String                @id @default(uuid())
+  walletId    String                @map("wallet_id")
+  type        WalletTransactionType
+  amount      Float
+  description String
+  referenceId String?               @map("reference_id")
+  createdAt   DateTime              @default(now()) @map("created_at")
+  wallet      Wallet                @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@map("wallet_transactions")
+}
+
+model Payment {
+  id        String        @id @default(uuid())
+  bookingId String        @unique @map("booking_id")
+  method    PaymentMethod
+  amount    Float
+  status    PaymentStatus @default(pending)
+  createdAt DateTime      @default(now()) @map("created_at")
+  booking   Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
+
+model Earning {
+  id          String   @id @default(uuid())
+  assistantId String   @map("assistant_id")
+  bookingId   String?  @map("booking_id")
+  amount      Float
+  description String
+  isPaidOut   Boolean  @default(false) @map("is_paid_out")
+  createdAt   DateTime @default(now()) @map("created_at")
+  assistant   User     @relation(fields: [assistantId], references: [id])
+
+  @@map("earnings")
+}
+
+model Referral {
+  id           String         @id @default(uuid())
+  referrerId   String         @map("referrer_id")
+  refereeId    String?        @map("referee_id")
+  code         String
+  rewardAmount Float          @map("reward_amount")
+  status       ReferralStatus @default(pending)
+  createdAt    DateTime       @default(now()) @map("created_at")
+  referrer     User           @relation("Referrer", fields: [referrerId], references: [id])
+  referee      User?          @relation("Referee", fields: [refereeId], references: [id])
+
+  @@map("referrals")
+}
+
+model Rating {
+  id          String   @id @default(uuid())
+  bookingId   String   @unique @map("booking_id")
+  customerId  String   @map("customer_id")
+  assistantId String   @map("assistant_id")
+  stars       Int
+  comment     String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  booking     Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  customer    User     @relation("RatingCustomer", fields: [customerId], references: [id])
+  assistant   User     @relation("RatingAssistant", fields: [assistantId], references: [id])
+
+  @@map("ratings")
+}
+
+model AppReview {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  bookingId String?  @unique @map("booking_id")
+  stars     Int
+  comment   String?
+  platform  String?
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  booking   Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  @@map("app_reviews")
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String           @map("user_id")
+  type      NotificationType
+  title     String
+  body      String
+  payload   Json?
+  readAt    DateTime?        @map("read_at")
+  createdAt DateTime         @default(now()) @map("created_at")
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model PlatformSettings {
+  id                     String   @id @default("default")
+  matchRadiusKm          Float    @default(15) @map("match_radius_km")
+  signupWalletBonus      Float    @default(500) @map("signup_wallet_bonus")
+  referralRewardAmount   Float    @default(100) @map("referral_reward_amount")
+  assistantEarningPercent Float   @default(80) @map("assistant_earning_percent")
+  matchBatchSize         Int      @default(3) @map("match_batch_size")
+  platformFeePercent     Float    @default(10) @map("platform_fee_percent")
+  bookingSearchTimeoutMin Int     @default(15) @map("booking_search_timeout_min")
+  cancellationFreeBeforeMin Int @default(60) @map("cancellation_free_before_min")
+  cancellationFeePercent Float  @default(10) @map("cancellation_fee_percent")
+  minCancellationFee     Float   @default(50) @map("min_cancellation_fee")
+  assistantCodeYear      Int      @default(2026) @map("assistant_code_year")
+  assistantCodeSeq       Int      @default(0) @map("assistant_code_seq")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  @@map("platform_settings")
+}
+
+model PayoutRequest {
+  id          String              @id @default(uuid())
+  assistantId String              @map("assistant_id")
+  amount      Float
+  status      PayoutRequestStatus @default(pending)
+  bankAccount String?             @map("bank_account")
+  ifscCode    String?             @map("ifsc_code")
+  adminNote   String?             @map("admin_note")
+  createdAt   DateTime            @default(now()) @map("created_at")
+  processedAt DateTime?           @map("processed_at")
+  assistant   User                @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+
+  @@map("payout_requests")
+}
+
+model PromoCode {
+  id            String            @id @default(uuid())
+  code          String            @unique
+  discountType  PromoDiscountType @map("discount_type")
+  discountValue Float             @map("discount_value")
+  maxUses       Int?              @map("max_uses")
+  usedCount     Int               @default(0) @map("used_count")
+  isActive      Boolean           @default(true) @map("is_active")
+  expiresAt     DateTime?         @map("expires_at")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  bookings      Booking[]
+
+  @@map("promo_codes")
+}
+
+model SupportTicket {
+  id         String              @id @default(uuid())
+  userId     String              @map("user_id")
+  bookingId  String?             @map("booking_id")
+  subject    String
+  message    String
+  status     SupportTicketStatus @default(open)
+  adminReply String?             @map("admin_reply")
+  createdAt  DateTime            @default(now()) @map("created_at")
+  updatedAt  DateTime            @updatedAt @map("updated_at")
+  user       User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("support_tickets")
+}
+
+model ChatMessage {
+  id        String   @id @default(uuid())
+  bookingId String   @map("booking_id")
+  senderId  String   @map("sender_id")
+  message   String
+  createdAt DateTime @default(now()) @map("created_at")
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  sender    User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@map("chat_messages")
+}
+
+model AdminAuditLog {
+  id        String   @id @default(uuid())
+  adminId   String   @map("admin_id")
+  action    String
+  entity    String
+  entityId  String?  @map("entity_id")
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("admin_audit_logs")
+}
