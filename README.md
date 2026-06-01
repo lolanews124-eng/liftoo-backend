@@ -6,10 +6,17 @@ NestJS REST API with PostgreSQL, Prisma, and Socket.io.
 
 ```bash
 npm install
-npx prisma generate
-npx prisma migrate dev
-npx prisma db seed
-npm run start:dev
+npm run db:setup          # local: migrate deploy + seed
+npm run dev
+```
+
+Production / server:
+
+```bash
+npm install
+npx prisma migrate deploy
+npx prisma db seed        # optional, first deploy only
+npm run start:prod
 ```
 
 From project root:
