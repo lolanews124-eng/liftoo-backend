@@ -63,6 +63,10 @@ export class AuthService {
     };
     if (this.isDevOtpMode()) {
       response.devOtp = otp;
+    } else if (!this.emailService.isConfigured()) {
+      response.devOtp = otp;
+      response.message =
+        'SMTP not configured — use the code below (development only)';
     }
     return response;
   }

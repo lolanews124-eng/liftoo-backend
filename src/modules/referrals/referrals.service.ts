@@ -28,6 +28,7 @@ export class ReferralsService {
 
   async getReferralInfo(userId: string) {
     const code = await this.ensureReferralCode(userId);
+    const settings = await this.platformSettings.get();
     const referrals = await this.prisma.referral.findMany({
       where: { referrerId: userId },
       include: { referee: { select: { name: true, phone: true } } },
@@ -38,8 +39,10 @@ export class ReferralsService {
 
     return {
       code,
+      referralCode: code,
       totalReferrals: referrals.length,
       totalEarned,
+      rewardPerReferral: settings.referralRewardAmount,
       referrals,
     };
   }

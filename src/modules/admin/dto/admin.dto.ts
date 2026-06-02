@@ -53,6 +53,10 @@ export class AdminBookingsQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsEnum(BookingStatus)
   status?: BookingStatus;
+
+  /** completed bookings awaiting customer payment */
+  @IsOptional()
+  paymentPending?: string;
 }
 
 export class AdminVerificationsQueryDto extends PaginationQueryDto {
@@ -240,6 +244,12 @@ export class UpdatePlatformSettingsDto {
   @IsNumber()
   @Min(0)
   minCancellationFee?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  minAssistantSettlementBalance?: number;
 }
 
 export class VerifyAssistantDto {

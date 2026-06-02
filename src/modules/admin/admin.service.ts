@@ -69,6 +69,8 @@ export class AdminService {
         bookings: { total: this.dev.bookings.length, active: 1, completed: 1 },
         pendingVerifications: 2,
         revenue: { total: 275, platform: 27.5, pendingPayouts: 220 },
+        pendingPayments: 0,
+        openSupportTickets: 0,
         recentBookings: this.dev.bookings,
       };
     }
@@ -83,6 +85,8 @@ export class AdminService {
       totalRevenue,
       platformRevenue,
       pendingPayouts,
+      pendingPayments,
+      openSupportTickets,
     ] = await Promise.all([
       this.prisma.user.count({ where: { roles: { has: UserRole.customer } } }),
       this.prisma.user.count({ where: { roles: { has: UserRole.assistant } } }),
@@ -116,6 +120,15 @@ export class AdminService {
         where: { isPaidOut: false },
         _sum: { amount: true },
       }),
+      this.prisma.booking.count({
+        where: {
+          status: BookingStatus.completed,
+          OR: [{ payment: null }, { payment: { status: 'pending' } }],
+        },
+      }),
+      this.prisma.supportTicket.count({
+        where: { status: { in: ['open', 'in_progress'] } },
+      }),
     ]);
 
     const recentBookings = await this.prisma.booking.findMany({
@@ -144,6 +157,8 @@ export class AdminService {
         platform: platformRevenue._sum.platformFee ?? 0,
         pendingPayouts: pendingPayouts._sum.amount ?? 0,
       },
+      pendingPayments,
+      openSupportTickets,
       recentBookings,
     };
   }
@@ -388,14 +403,23 @@ export class AdminService {
 
     const { take, skip } = this.paginate(query.page, query.limit);
     const where: Prisma.BookingWhereInput = {};
-    if (query.status) where.status = query.status;
-    if (query.search) {
-      where.OR = [
-        { venueName: { contains: query.search, mode: 'insensitive' } },
-        { customer: { name: { contains: query.search, mode: 'insensitive' } } },
-        { customer: { phone: { contains: query.search } } },
-      ];
+    const and: Prisma.BookingWhereInput[] = [];
+    if (query.paymentPending === 'true' || query.paymentPending === '1') {
+      and.push({ status: BookingStatus.completed });
+      and.push({ OR: [{ payment: null }, { payment: { status: 'pending' } }] });
+    } else if (query.status) {
+      where.status = query.status;
     }
+    if (query.search) {
+      and.push({
+        OR: [
+          { venueName: { contains: query.search, mode: 'insensitive' } },
+          { customer: { name: { contains: query.search, mode: 'insensitive' } } },
+          { customer: { phone: { contains: query.search } } },
+        ],
+      });
+    }
+    if (and.length) where.AND = and;
 
     const [items, total] = await Promise.all([
       this.prisma.booking.findMany({
