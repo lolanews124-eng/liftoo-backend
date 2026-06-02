@@ -90,8 +90,16 @@ export class WalletService {
     });
   }
 
-  async topUp(userId: string, amount: number) {
-    return this.credit(userId, amount, 'Wallet top-up');
+  async topUp(userId: string, amount: number, method = 'upi') {
+    const label = method === 'card' ? 'Card' : 'UPI';
+    const wallet = await this.credit(userId, amount, `Wallet top-up via ${label}`);
+    const full = await this.getWallet(userId);
+    return {
+      balance: full.balance,
+      credited: amount,
+      method,
+      transactions: full.transactions,
+    };
   }
 
   private async ensureWallet(userId: string) {

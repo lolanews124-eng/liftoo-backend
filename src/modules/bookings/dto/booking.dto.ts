@@ -66,3 +66,8 @@ export class CancelBookingDto {
   @IsString()
   note?: string;
 }
+
+export class ConfirmCashPaymentDto {
+  @IsString()
+  otp: string;
+}

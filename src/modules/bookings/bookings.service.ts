@@ -388,19 +388,129 @@ export class BookingsService {
     });
 
     const settings = await this.getSettings();
-    const payoutPercent =
-      updated.category?.assistantPayoutPercent ?? settings.assistantEarningPercent;
-    const assistantEarning = Math.round(updated.serviceFee * (payoutPercent / 100));
-    await this.earnings.credit(assistantId, assistantEarning, bookingId);
+    const { assistantEarning, companyShare } = this.computePaymentSplit(updated, settings);
+    const paymentConfirmOtp = this.generatePaymentOtp();
+    const paymentOtpExpiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000);
 
-    await this.referrals.processReferralReward(updated.customerId);
-    await this.events.emitBookingUpdate(updated, BookingStatus.completed);
+    const withPayment = await this.prisma.booking.update({
+      where: { id: bookingId },
+      data: {
+        assistantEarningAmount: assistantEarning,
+        companyShareAmount: companyShare,
+        paymentConfirmOtp,
+        paymentOtpExpiresAt,
+        payment: {
+          upsert: {
+            create: {
+              amount: updated.totalAmount,
+              status: PaymentStatus.pending,
+            },
+            update: {
+              amount: updated.totalAmount,
+              status: PaymentStatus.pending,
+              method: null,
+              cashCollectedAt: null,
+            },
+          },
+        },
+      },
+      include: this.bookingInclude,
+    });
+
+    await this.events.emitBookingUpdate(withPayment, BookingStatus.completed);
 
     return {
-      ...this.sanitizeBooking(updated, assistantId, 'assistant'),
+      ...this.sanitizeBooking(withPayment, assistantId, 'assistant'),
       assistantEarning,
+      companyShareAmount: companyShare,
       requiresPayment: true,
+      paymentConfirmOtp,
     };
+  }
+
+  async markCashCollected(assistantId: string, bookingId: string) {
+    const booking = await this.getAndAuthorize(bookingId, assistantId, 'assistant');
+    if (booking.status !== BookingStatus.completed) {
+      throw new BadRequestException('Booking must be completed first');
+    }
+    if (booking.payment?.status === PaymentStatus.completed) {
+      throw new BadRequestException('Payment already completed');
+    }
+
+    const settings = await this.getSettings();
+    const companyShare =
+      booking.companyShareAmount ??
+      this.computePaymentSplit(booking, settings).companyShare;
+    const minSettlement = settings.minAssistantSettlementBalance ?? 150;
+    const wallet = await this.wallet.getWallet(assistantId);
+    const share = Number(companyShare);
+    const balance = Number(wallet.balance);
+    if (balance < share) {
+      throw new BadRequestException(
+        `Add at least ₹${share.toFixed(0)} to your settlement wallet (current ₹${balance.toFixed(0)}) to accept cash payments`,
+      );
+    }
+
+    await this.prisma.payment.upsert({
+      where: { bookingId },
+      create: {
+        bookingId,
+        amount: booking.totalAmount,
+        status: PaymentStatus.pending,
+        method: PaymentMethod.cash,
+        cashCollectedAt: new Date(),
+      },
+      update: {
+        method: PaymentMethod.cash,
+        cashCollectedAt: new Date(),
+      },
+    });
+
+    const fresh = await this.findOneRaw(bookingId);
+    if (!fresh) throw new NotFoundException();
+
+    return {
+      ...this.sanitizeBooking(fresh, assistantId, 'assistant'),
+      paymentConfirmOtp: fresh.paymentConfirmOtp,
+      message: 'Cash received recorded. Ask customer to confirm with OTP in their app.',
+    };
+  }
+
+  async confirmCashPayment(customerId: string, bookingId: string, otp: string) {
+    const booking = await this.getAndAuthorize(bookingId, customerId, 'customer');
+    if (booking.status !== BookingStatus.completed) {
+      throw new BadRequestException('Booking not completed');
+    }
+    if (booking.payment?.status === PaymentStatus.completed) {
+      throw new BadRequestException('Payment already completed');
+    }
+    if (!booking.payment?.cashCollectedAt) {
+      throw new BadRequestException('Assistant must confirm cash received first');
+    }
+    if (!booking.paymentConfirmOtp || booking.paymentConfirmOtp !== otp.trim()) {
+      throw new BadRequestException('Invalid payment OTP');
+    }
+    if (booking.paymentOtpExpiresAt && booking.paymentOtpExpiresAt < new Date()) {
+      throw new BadRequestException('Payment OTP expired — ask assistant to complete job again');
+    }
+
+    if (!booking.assistantId) {
+      throw new BadRequestException('No assistant assigned');
+    }
+
+    const settings = await this.getSettings();
+    const companyShare =
+      booking.companyShareAmount ??
+      this.computePaymentSplit(booking, settings).companyShare;
+
+    await this.wallet.debit(
+      booking.assistantId,
+      companyShare,
+      `Liftoo share — cash booking ${bookingId.slice(0, 8)}`,
+      bookingId,
+    );
+
+    return this.finalizePayment(bookingId, PaymentMethod.cash, customerId);
   }
 
   async cancel(userId: string, bookingId: string, reason?: string, note?: string) {
@@ -471,6 +581,12 @@ export class BookingsService {
     if (booking.status !== BookingStatus.completed) {
       throw new BadRequestException('Booking not completed');
     }
+    if (booking.payment?.status === PaymentStatus.completed) {
+      throw new BadRequestException('Payment already completed');
+    }
+    if (method === PaymentMethod.cash) {
+      throw new BadRequestException('Use cash confirmation flow with OTP');
+    }
 
     if (method === PaymentMethod.wallet) {
       await this.wallet.debit(
@@ -479,7 +595,7 @@ export class BookingsService {
         `Payment for booking ${bookingId.slice(0, 8)}`,
         bookingId,
       );
-    } else {
+    } else if (method === PaymentMethod.upi || method === PaymentMethod.gateway) {
       await this.paymentGateway.initiatePayment({
         bookingId,
         amount: booking.totalAmount,
@@ -487,7 +603,49 @@ export class BookingsService {
         customerId,
       });
     }
-    const payment = await this.prisma.payment.upsert({
+
+    return this.finalizePayment(bookingId, method, customerId);
+  }
+
+  private computePaymentSplit(
+    booking: {
+      serviceFee: number;
+      totalAmount: number;
+      category?: { assistantPayoutPercent: number | null } | null;
+    },
+    settings: { assistantEarningPercent: number },
+  ) {
+    const payoutPercent =
+      booking.category?.assistantPayoutPercent ?? settings.assistantEarningPercent;
+    const assistantEarning = Math.round(booking.serviceFee * (payoutPercent / 100));
+    const companyShare = Math.round(booking.totalAmount - assistantEarning);
+    return { assistantEarning, companyShare, payoutPercent };
+  }
+
+  private generatePaymentOtp() {
+    return String(1000 + Math.floor(Math.random() * 9000));
+  }
+
+  private async finalizePayment(
+    bookingId: string,
+    method: PaymentMethod,
+    customerId: string,
+  ) {
+    const booking = await this.findOneRaw(bookingId);
+    if (!booking) throw new NotFoundException();
+    if (booking.status !== BookingStatus.completed) {
+      throw new BadRequestException('Booking not completed');
+    }
+    if (booking.payment?.status === PaymentStatus.completed) {
+      throw new BadRequestException('Payment already completed');
+    }
+
+    const settings = await this.getSettings();
+    const assistantEarning =
+      booking.assistantEarningAmount ??
+      this.computePaymentSplit(booking, settings).assistantEarning;
+
+    await this.prisma.payment.upsert({
       where: { bookingId },
       create: {
         bookingId,
@@ -495,21 +653,43 @@ export class BookingsService {
         amount: booking.totalAmount,
         status: PaymentStatus.completed,
       },
-      update: { method, status: PaymentStatus.completed },
+      update: {
+        method,
+        status: PaymentStatus.completed,
+        amount: booking.totalAmount,
+      },
     });
 
-    const updated = await this.findOneRaw(bookingId);
+    if (booking.assistantId && assistantEarning > 0) {
+      await this.earnings.credit(booking.assistantId, assistantEarning, bookingId);
+    }
+
+    await this.referrals.processReferralReward(booking.customerId);
+
+    const cleared = await this.prisma.booking.update({
+      where: { id: bookingId },
+      data: {
+        paymentConfirmOtp: null,
+        paymentOtpExpiresAt: null,
+      },
+      include: this.bookingInclude,
+    });
+
+    await this.events.emitBookingUpdate(cleared, BookingStatus.completed);
 
     const wallet =
       method === PaymentMethod.wallet
         ? await this.prisma.wallet.findUnique({ where: { userId: customerId } })
         : null;
 
+    const payment = cleared.payment!;
+
     return {
       payment,
-      booking: updated ? this.sanitizeBooking(updated, customerId, 'customer') : null,
-      nextStep: this.resolveNextStep(updated),
+      booking: this.sanitizeBooking(cleared, customerId, 'customer'),
+      nextStep: this.resolveNextStep(cleared),
       walletBalance: wallet?.balance,
+      assistantEarning,
     };
   }
 
@@ -693,6 +873,25 @@ export class BookingsService {
         customer: booking.status === BookingStatus.searching
           ? { id: booking.customer.id, name: booking.customer.name }
           : booking.customer,
+      };
+    }
+
+    if (role === 'customer') {
+      result = {
+        ...result,
+        paymentConfirmOtp: undefined,
+        paymentOtpExpiresAt: undefined,
+      };
+    }
+
+    if (
+      booking.payment?.status === PaymentStatus.completed ||
+      (role === 'assistant' && booking.payment?.status !== PaymentStatus.pending)
+    ) {
+      result = {
+        ...result,
+        paymentConfirmOtp: undefined,
+        paymentOtpExpiresAt: undefined,
       };
     }
 

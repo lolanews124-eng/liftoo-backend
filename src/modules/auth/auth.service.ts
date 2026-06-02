@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { UserRole } from '@prisma/client';
+import { BookingStatus, UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OtpStoreService } from '../../otp/otp-store.service';
 import { UsersService } from '../users/users.service';
@@ -158,6 +158,50 @@ export class AuthService {
   async setRole(userId: string, role: UserRole) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new UnauthorizedException();
+
+    if (role === UserRole.customer) {
+      const availability = await this.prisma.assistantAvailability.findUnique({
+        where: { userId },
+      });
+      if (availability?.isOnline) {
+        throw new BadRequestException(
+          'Go offline before switching to customer mode.',
+        );
+      }
+      const activeJob = await this.prisma.booking.findFirst({
+        where: {
+          assistantId: userId,
+          status: {
+            in: [
+              BookingStatus.assigned,
+              BookingStatus.arriving,
+              BookingStatus.started,
+            ],
+          },
+        },
+      });
+      if (activeJob) {
+        throw new BadRequestException(
+          'Complete your active job before switching to customer mode.',
+        );
+      }
+    }
+
+    if (role === UserRole.assistant) {
+      const activeBooking = await this.prisma.booking.findFirst({
+        where: {
+          customerId: userId,
+          status: {
+            notIn: [BookingStatus.completed, BookingStatus.cancelled],
+          },
+        },
+      });
+      if (activeBooking) {
+        throw new BadRequestException(
+          'Complete or cancel your active booking before switching to assistant mode.',
+        );
+      }
+    }
 
     const roles = new Set(user.roles);
     roles.add(role);

@@ -264,6 +264,10 @@ model Booking {
   dispatchRound   Int           @default(0) @map("dispatch_round")
   notifiedAssistantIds String[] @default([]) @map("notified_assistant_ids")
   offeredAssistantIds String[] @default([]) @map("offered_assistant_ids")
+  paymentConfirmOtp   String?       @map("payment_confirm_otp")
+  paymentOtpExpiresAt DateTime?     @map("payment_otp_expires_at")
+  assistantEarningAmount Float?     @map("assistant_earning_amount")
+  companyShareAmount  Float?        @map("company_share_amount")
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
 
@@ -332,13 +336,14 @@ model WalletTransaction {
 }
 
 model Payment {
-  id        String        @id @default(uuid())
-  bookingId String        @unique @map("booking_id")
-  method    PaymentMethod
-  amount    Float
-  status    PaymentStatus @default(pending)
-  createdAt DateTime      @default(now()) @map("created_at")
-  booking   Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  id              String         @id @default(uuid())
+  bookingId       String         @unique @map("booking_id")
+  method          PaymentMethod?
+  amount          Float
+  status          PaymentStatus  @default(pending)
+  cashCollectedAt DateTime?      @map("cash_collected_at")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  booking         Booking        @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
   @@map("payments")
 }
@@ -425,6 +430,7 @@ model PlatformSettings {
   cancellationFreeBeforeMin Int @default(60) @map("cancellation_free_before_min")
   cancellationFeePercent Float  @default(10) @map("cancellation_fee_percent")
   minCancellationFee     Float   @default(50) @map("min_cancellation_fee")
+  minAssistantSettlementBalance Float @default(150) @map("min_assistant_settlement_balance")
   assistantCodeYear      Int      @default(2026) @map("assistant_code_year")
   assistantCodeSeq       Int      @default(0) @map("assistant_code_seq")
   updatedAt              DateTime @updatedAt @map("updated_at")

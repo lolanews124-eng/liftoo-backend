@@ -14,6 +14,7 @@ export type PlatformSettingsData = {
   cancellationFreeBeforeMin: number;
   cancellationFeePercent: number;
   minCancellationFee: number;
+  minAssistantSettlementBalance: number;
 };
 
 @Injectable()
@@ -46,6 +47,9 @@ export class PlatformSettingsService implements OnModuleInit {
       cancellationFreeBeforeMin: Number(this.config.get('CANCELLATION_FREE_BEFORE_MIN', 60)),
       cancellationFeePercent: Number(this.config.get('CANCELLATION_FEE_PERCENT', 10)),
       minCancellationFee: Number(this.config.get('MIN_CANCELLATION_FEE', 50)),
+      minAssistantSettlementBalance: Number(
+        this.config.get('MIN_ASSISTANT_SETTLEMENT_BALANCE', 150),
+      ),
     };
   }
 
@@ -69,6 +73,7 @@ export class PlatformSettingsService implements OnModuleInit {
         cancellationFreeBeforeMin: d.cancellationFreeBeforeMin,
         cancellationFeePercent: d.cancellationFeePercent,
         minCancellationFee: d.minCancellationFee,
+        minAssistantSettlementBalance: d.minAssistantSettlementBalance,
         assistantCodeYear: new Date().getFullYear(),
         assistantCodeSeq: 0,
       },
@@ -99,6 +104,8 @@ export class PlatformSettingsService implements OnModuleInit {
       cancellationFreeBeforeMin: row.cancellationFreeBeforeMin,
       cancellationFeePercent: row.cancellationFeePercent,
       minCancellationFee: row.minCancellationFee,
+      minAssistantSettlementBalance:
+        (row as { minAssistantSettlementBalance?: number }).minAssistantSettlementBalance ?? 150,
     };
     return this.cache;
   }
@@ -129,6 +136,7 @@ export class PlatformSettingsService implements OnModuleInit {
       cancellationFreeBeforeMin: updated.cancellationFreeBeforeMin,
       cancellationFeePercent: updated.cancellationFeePercent,
       minCancellationFee: updated.minCancellationFee,
+      minAssistantSettlementBalance: updated.minAssistantSettlementBalance,
     };
     return this.cache;
   }

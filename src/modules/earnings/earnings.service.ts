@@ -6,6 +6,11 @@ export class EarningsService {
   constructor(private prisma: PrismaService) {}
 
   async credit(assistantId: string, amount: number, bookingId: string) {
+    const existing = await this.prisma.earning.findFirst({
+      where: { bookingId, assistantId },
+    });
+    if (existing) return existing;
+
     return this.prisma.earning.create({
       data: {
         assistantId,

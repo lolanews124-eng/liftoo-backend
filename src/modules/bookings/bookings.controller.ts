@@ -9,7 +9,14 @@ import {
 } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { BookingsService } from './bookings.service';
-import { CreateBookingDto, VerifyOtpDto, PayBookingDto, RejectBookingDto, CancelBookingDto } from './dto/booking.dto';
+import {
+  CreateBookingDto,
+  VerifyOtpDto,
+  PayBookingDto,
+  RejectBookingDto,
+  CancelBookingDto,
+  ConfirmCashPaymentDto,
+} from './dto/booking.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -116,5 +123,23 @@ export class BookingsController {
     @Body() dto: PayBookingDto,
   ) {
     return this.bookingsService.pay(user.sub, id, dto.method);
+  }
+
+  @Post(':id/cash/collect')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.assistant)
+  markCashCollected(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
+    return this.bookingsService.markCashCollected(user.sub, id);
+  }
+
+  @Post(':id/cash/confirm')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.customer)
+  confirmCashPayment(
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: ConfirmCashPaymentDto,
+  ) {
+    return this.bookingsService.confirmCashPayment(user.sub, id, dto.otp);
   }
 }
