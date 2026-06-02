@@ -88,8 +88,23 @@ export class AuthService {
       }
     }
 
+    if (user.emailVerified) {
+      const tokens = await this.generateTokens(
+        user.id,
+        user.email,
+        user.phone,
+        user.activeRole,
+      );
+      return {
+        ...tokens,
+        user: await this.usersService.getProfile(user.id),
+        requiresOtp: false,
+        isNewUser: false,
+      };
+    }
+
     const otpResponse = await this.sendEmailOtp(normalized);
-    return { ...otpResponse, isNewUser };
+    return { ...otpResponse, requiresOtp: true, isNewUser };
   }
 
   async verifyEmailOtp(email: string, otp: string, referralCode?: string) {
