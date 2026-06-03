@@ -13,6 +13,10 @@ class UpdateProfileDto {
   phone?: string;
 }
 
+class UpdateFcmTokenDto {
+  @IsOptional() @IsString() token?: string;
+}
+
 class CreateAddressDto {
   @IsString() label: string;
   @IsString() formattedAddress: string;
@@ -34,6 +38,11 @@ export class UsersController {
   @Put('me')
   updateMe(@CurrentUser() user: JwtPayload, @Body() dto: UpdateProfileDto) {
     return this.usersService.updateProfile(user.sub, dto);
+  }
+
+  @Put('me/fcm-token')
+  updateFcmToken(@CurrentUser() user: JwtPayload, @Body() dto: UpdateFcmTokenDto) {
+    return this.usersService.updateFcmToken(user.sub, dto.token ?? null);
   }
 
   @Get('addresses')

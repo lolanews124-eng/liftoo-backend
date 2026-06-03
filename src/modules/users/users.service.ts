@@ -81,6 +81,15 @@ export class UsersService {
     return this.getProfile(userId);
   }
 
+  async updateFcmToken(userId: string, token: string | null) {
+    const normalized = token?.trim() || null;
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { fcmToken: normalized },
+    });
+    return { ok: true };
+  }
+
   async getAddresses(userId: string) {
     return this.prisma.address.findMany({
       where: { userId },
