@@ -60,6 +60,13 @@ export class BookingsController {
     return this.bookingsService.getActiveJob(user.sub);
   }
 
+  @Get('blocking')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.customer)
+  blocking(@CurrentUser() user: JwtPayload) {
+    return this.bookingsService.getCustomerBlockingBooking(user.sub);
+  }
+
   @Get('nearby')
   @UseGuards(RolesGuard)
   @Roles(UserRole.assistant)

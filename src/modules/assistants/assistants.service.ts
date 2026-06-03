@@ -14,12 +14,32 @@ export class AssistantsService {
           'Your account is pending admin verification. You cannot go online until approved.',
         );
       }
+      if (
+        lat == null ||
+        lng == null ||
+        Number.isNaN(lat) ||
+        Number.isNaN(lng)
+      ) {
+        throw new BadRequestException(
+          'lat and lng are required when going online so customers can find you.',
+        );
+      }
     }
 
     return this.prisma.assistantAvailability.upsert({
       where: { userId },
-      create: { userId, isOnline, lastLat: lat, lastLng: lng },
-      update: { isOnline, ...(lat !== undefined ? { lastLat: lat, lastLng: lng } : {}) },
+      create: {
+        userId,
+        isOnline,
+        lastLat: isOnline ? lat : null,
+        lastLng: isOnline ? lng : null,
+      },
+      update: {
+        isOnline,
+        ...(isOnline && lat != null && lng != null
+          ? { lastLat: lat, lastLng: lng, updatedAt: new Date() }
+          : { updatedAt: new Date() }),
+      },
     });
   }
 
@@ -34,7 +54,7 @@ export class AssistantsService {
 
   async getAvailabilitySummary(lat: number, lng: number) {
     const settings = await this.prisma.platformSettings.findUnique({ where: { id: 'default' } });
-    const matchRadiusKm = settings?.matchRadiusKm ?? 10;
+    const matchRadiusKm = settings?.matchRadiusKm ?? 15;
     const online = await this.getVerifiedOnlineAssistants();
     const withDistance = online
       .map((a) => ({
@@ -83,10 +103,15 @@ export class AssistantsService {
     if (!profile?.adminVerified) {
       throw new ForbiddenException('Assistant not verified');
     }
-    return this.prisma.assistantAvailability.upsert({
+    const availability = await this.prisma.assistantAvailability.findUnique({
       where: { userId },
-      create: { userId, isOnline: true, lastLat: lat, lastLng: lng },
-      update: { lastLat: lat, lastLng: lng },
+    });
+    if (!availability?.isOnline) {
+      throw new BadRequestException('Go online before updating location');
+    }
+    return this.prisma.assistantAvailability.update({
+      where: { userId },
+      data: { lastLat: lat, lastLng: lng, updatedAt: new Date() },
     });
   }
 

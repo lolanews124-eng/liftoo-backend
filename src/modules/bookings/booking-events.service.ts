@@ -76,7 +76,17 @@ export class BookingEventsService {
     }
   }
 
-  emitBookingRequest(assistantIds: string[], booking: unknown) {
+  async emitBookingRequest(assistantIds: string[], booking: unknown) {
     this.realtime.emitBookingRequest(assistantIds, booking);
+    const b = booking as { id?: string; venueName?: string };
+    const venue = b.venueName?.trim();
+    for (const assistantId of assistantIds) {
+      await this.notifications.create(assistantId, {
+        type: NotificationType.new_booking,
+        title: 'New booking request',
+        body: venue ? `Request near ${venue}` : 'Tap to view nearby booking request',
+        payload: { bookingId: b.id },
+      });
+    }
   }
 }

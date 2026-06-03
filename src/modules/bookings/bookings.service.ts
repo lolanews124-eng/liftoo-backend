@@ -66,7 +66,122 @@ export class BookingsService {
     return this.platformSettings.get();
   }
 
+  /** Customer cannot book again until prior booking is done and payment is completed. */
+  private customerBlockingWhere(customerId: string): Prisma.BookingWhereInput {
+    return {
+      customerId,
+      OR: [
+        {
+          status: {
+            notIn: [BookingStatus.completed, BookingStatus.cancelled],
+          },
+        },
+        {
+          status: BookingStatus.completed,
+          OR: [
+            { payment: null },
+            { payment: { status: { not: PaymentStatus.completed } } },
+          ],
+        },
+      ],
+    };
+  }
+
+  /** Assistant cannot take another job until current one is finished and paid. */
+  private assistantBlockingWhere(assistantId: string): Prisma.BookingWhereInput {
+    return {
+      assistantId,
+      OR: [
+        {
+          status: {
+            in: [
+              BookingStatus.assigned,
+              BookingStatus.arriving,
+              BookingStatus.started,
+            ],
+          },
+        },
+        {
+          status: BookingStatus.completed,
+          OR: [
+            { payment: null },
+            { payment: { status: { not: PaymentStatus.completed } } },
+          ],
+        },
+      ],
+    };
+  }
+
+  private async assertCustomerCanBook(customerId: string, exceptBookingId?: string) {
+    const blocking = await this.prisma.booking.findFirst({
+      where: {
+        ...this.customerBlockingWhere(customerId),
+        ...(exceptBookingId ? { id: { not: exceptBookingId } } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (blocking) {
+      throw new BadRequestException(
+        'Finish your current booking and complete payment before booking again.',
+      );
+    }
+  }
+
+  private async assertAssistantCanAccept(assistantId: string) {
+    const blocking = await this.prisma.booking.findFirst({
+      where: this.assistantBlockingWhere(assistantId),
+      orderBy: { createdAt: 'desc' },
+    });
+    if (blocking) {
+      throw new BadRequestException(
+        'Complete your current job and payment before accepting new bookings.',
+      );
+    }
+  }
+
+  private async busyAssistantIds(): Promise<Set<string>> {
+    const rows = await this.prisma.booking.findMany({
+      where: {
+        assistantId: { not: null },
+        OR: [
+          {
+            status: {
+              in: [
+                BookingStatus.assigned,
+                BookingStatus.arriving,
+                BookingStatus.started,
+              ],
+            },
+          },
+          {
+            status: BookingStatus.completed,
+            OR: [
+              { payment: null },
+              { payment: { status: { not: PaymentStatus.completed } } },
+            ],
+          },
+        ],
+      },
+      select: { assistantId: true },
+    });
+    return new Set(
+      rows.map((r) => r.assistantId).filter((id): id is string => id != null),
+    );
+  }
+
+  async getCustomerBlockingBooking(customerId: string) {
+    const booking = await this.prisma.booking.findFirst({
+      where: this.customerBlockingWhere(customerId),
+      include: this.bookingInclude,
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!booking) return null;
+    const hydrated = await this.maybeTimeoutSearch(booking);
+    return this.sanitizeBooking(hydrated, customerId, 'customer');
+  }
+
   async create(customerId: string, dto: CreateBookingDto) {
+    await this.assertCustomerCanBook(customerId);
     const category = await this.categories.findById(dto.categoryId);
     if (!category) throw new NotFoundException('Category not found');
 
@@ -104,6 +219,7 @@ export class BookingsService {
 
   async confirm(customerId: string, bookingId: string) {
     const booking = await this.getAndAuthorize(bookingId, customerId, 'customer');
+    await this.assertCustomerCanBook(customerId, bookingId);
     if (booking.status !== BookingStatus.pending) {
       throw new BadRequestException('Booking cannot be confirmed');
     }
@@ -200,17 +316,9 @@ export class BookingsService {
 
   async getActiveJob(assistantId: string) {
     const booking = await this.prisma.booking.findFirst({
-      where: {
-        assistantId,
-        status: {
-          in: [
-            BookingStatus.assigned,
-            BookingStatus.arriving,
-            BookingStatus.started,
-          ],
-        },
-      },
+      where: this.assistantBlockingWhere(assistantId),
       include: this.bookingInclude,
+      orderBy: { createdAt: 'desc' },
     });
     return booking ? this.sanitizeBooking(booking, assistantId, 'assistant') : null;
   }
@@ -244,6 +352,7 @@ export class BookingsService {
 
   async accept(assistantId: string, bookingId: string) {
     await this.ensureAssistant(assistantId);
+    await this.assertAssistantCanAccept(assistantId);
 
     const availability = await this.prisma.assistantAvailability.findUnique({
       where: { userId: assistantId },
@@ -733,6 +842,7 @@ export class BookingsService {
       ...rejected.map((r) => r.assistantId),
       ...booking.offeredAssistantIds,
     ]);
+    const busyAssistants = await this.busyAssistantIds();
 
     const online = await this.prisma.assistantAvailability.findMany({
       where: { isOnline: true },
@@ -743,6 +853,7 @@ export class BookingsService {
       .filter((a) => a.user.assistantProfile?.adminVerified)
       .filter((a) => a.userId !== booking.customerId)
       .filter((a) => !excluded.has(a.userId))
+      .filter((a) => !busyAssistants.has(a.userId))
       .filter((a) =>
         this.isBookingInRange(
           booking.lat,
@@ -806,7 +917,7 @@ export class BookingsService {
       include: this.bookingInclude,
     });
 
-    this.events.emitBookingRequest(batch, updated);
+    await this.events.emitBookingRequest(batch, updated);
   }
 
   private async getEligibleAssistantIds(

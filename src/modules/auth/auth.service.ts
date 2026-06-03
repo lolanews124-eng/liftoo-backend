@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { BookingStatus, UserRole } from '@prisma/client';
+import { BookingStatus, PaymentStatus, UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OtpStoreService } from '../../otp/otp-store.service';
 import { UsersService } from '../users/users.service';
@@ -175,18 +175,29 @@ export class AuthService {
       const activeJob = await this.prisma.booking.findFirst({
         where: {
           assistantId: userId,
-          status: {
-            in: [
-              BookingStatus.assigned,
-              BookingStatus.arriving,
-              BookingStatus.started,
-            ],
-          },
+          OR: [
+            {
+              status: {
+                in: [
+                  BookingStatus.assigned,
+                  BookingStatus.arriving,
+                  BookingStatus.started,
+                ],
+              },
+            },
+            {
+              status: BookingStatus.completed,
+              OR: [
+                { payment: null },
+                { payment: { status: { not: PaymentStatus.completed } } },
+              ],
+            },
+          ],
         },
       });
       if (activeJob) {
         throw new BadRequestException(
-          'Complete your active job before switching to customer mode.',
+          'Complete your active job and payment before switching to customer mode.',
         );
       }
     }
@@ -195,20 +206,39 @@ export class AuthService {
       const activeBooking = await this.prisma.booking.findFirst({
         where: {
           customerId: userId,
-          status: {
-            notIn: [BookingStatus.completed, BookingStatus.cancelled],
-          },
+          OR: [
+            {
+              status: {
+                notIn: [BookingStatus.completed, BookingStatus.cancelled],
+              },
+            },
+            {
+              status: BookingStatus.completed,
+              OR: [
+                { payment: null },
+                { payment: { status: { not: PaymentStatus.completed } } },
+              ],
+            },
+          ],
         },
       });
       if (activeBooking) {
         throw new BadRequestException(
-          'Complete or cancel your active booking before switching to assistant mode.',
+          'Finish your booking and payment before switching to assistant mode.',
         );
       }
     }
 
+    if (role === UserRole.assistant && !user.roles.includes(UserRole.assistant)) {
+      throw new BadRequestException(
+        'Assistant mode is not enabled on your account. Contact Liftoo if you applied to become an assistant.',
+      );
+    }
+
     const roles = new Set(user.roles);
-    roles.add(role);
+    if (role === UserRole.customer) {
+      roles.add(UserRole.customer);
+    }
 
     if (role === UserRole.customer) {
       await this.prisma.customerProfile.upsert({
