@@ -2,9 +2,24 @@ import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/com
 import { PrismaService } from '../../prisma/prisma.service';
 import { haversineKm } from '../../common/utils/geo.util';
 
+/** Assistant app pings every ~45s while online; mark stale if no heartbeat. */
+const ASSISTANT_ONLINE_STALE_MS = 2 * 60 * 1000;
+
 @Injectable()
 export class AssistantsService {
   constructor(private prisma: PrismaService) {}
+
+  private staleOnlineCutoff() {
+    return new Date(Date.now() - ASSISTANT_ONLINE_STALE_MS);
+  }
+
+  private async pruneStaleOnlineAssistants() {
+    const cutoff = this.staleOnlineCutoff();
+    await this.prisma.assistantAvailability.updateMany({
+      where: { isOnline: true, updatedAt: { lt: cutoff } },
+      data: { isOnline: false },
+    });
+  }
 
   async setOnline(userId: string, isOnline: boolean, lat?: number, lng?: number) {
     if (isOnline) {
@@ -116,8 +131,10 @@ export class AssistantsService {
   }
 
   private async getVerifiedOnlineAssistants() {
+    await this.pruneStaleOnlineAssistants();
+    const cutoff = this.staleOnlineCutoff();
     const online = await this.prisma.assistantAvailability.findMany({
-      where: { isOnline: true },
+      where: { isOnline: true, updatedAt: { gte: cutoff } },
       include: { user: { include: { assistantProfile: true } } },
     });
     return online.filter((a) => a.user.assistantProfile?.adminVerified);

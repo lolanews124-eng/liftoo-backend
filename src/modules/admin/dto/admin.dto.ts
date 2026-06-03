@@ -5,15 +5,19 @@ import {
   VerificationStatus,
 } from '@prisma/client';
 import {
+  IsArray,
   IsBoolean,
   IsEmail,
   IsEnum,
+  IsIn,
   IsNumber,
   IsOptional,
   IsString,
+  MaxLength,
   Min,
   MinLength,
 } from 'class-validator';
+import { BroadcastAudience } from '@prisma/client';
 import { Type } from 'class-transformer';
 
 export class AdminLoginDto {
@@ -75,6 +79,8 @@ export class UpdateAdminUserDto {
   isSuspended?: boolean;
 
   @IsOptional()
+  @IsArray()
+  @IsEnum(UserRole, { each: true })
   roles?: UserRole[];
 }
 
@@ -265,7 +271,7 @@ export class CreatePromoDto {
   @IsString()
   code: string;
 
-  @IsString()
+  @IsIn(['fixed', 'percent'])
   discountType: 'fixed' | 'percent';
 
   @Type(() => Number)
@@ -300,4 +306,19 @@ export class UpdateSupportTicketDto {
   @IsOptional()
   @IsString()
   adminReply?: string;
+}
+
+export class AdminBroadcastNotificationDto {
+  @IsEnum(BroadcastAudience)
+  audience: BroadcastAudience;
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(120)
+  title: string;
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(1000)
+  body: string;
 }

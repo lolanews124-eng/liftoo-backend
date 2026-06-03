@@ -33,6 +33,7 @@ import {
   CreatePromoDto,
   ProcessPayoutDto,
   UpdateSupportTicketDto,
+  AdminBroadcastNotificationDto,
 } from './dto/admin.dto';
 
 @Controller('api/v1/admin')
@@ -300,5 +301,20 @@ export class AdminController {
   @UseGuards(JwtAuthGuard, AdminGuard)
   auditLogs(@Query() query: PaginationQueryDto) {
     return this.adminService.listAuditLogs(query);
+  }
+
+  @Post('notifications/broadcast')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  broadcastNotification(
+    @CurrentUser('sub') adminId: string,
+    @Body() dto: AdminBroadcastNotificationDto,
+  ) {
+    return this.adminService.broadcastNotification(adminId, dto);
+  }
+
+  @Get('notifications/broadcasts')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  listNotificationBroadcasts(@Query() query: PaginationQueryDto) {
+    return this.adminService.listNotificationBroadcasts(query);
   }
 }

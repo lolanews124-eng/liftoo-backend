@@ -547,9 +547,7 @@ export class BookingsService {
     }
 
     const settings = await this.getSettings();
-    const companyShare =
-      booking.companyShareAmount ??
-      this.computePaymentSplit(booking, settings).companyShare;
+    const { companyShare } = this.computePaymentSplit(booking, settings);
     const minSettlement = settings.minAssistantSettlementBalance ?? 150;
     const wallet = await this.wallet.getWallet(assistantId);
     const share = Number(companyShare);
@@ -608,16 +606,16 @@ export class BookingsService {
     }
 
     const settings = await this.getSettings();
-    const companyShare =
-      booking.companyShareAmount ??
-      this.computePaymentSplit(booking, settings).companyShare;
+    const { companyShare } = this.computePaymentSplit(booking, settings);
 
-    await this.wallet.debit(
-      booking.assistantId,
-      companyShare,
-      `Liftoo share — cash booking ${bookingId.slice(0, 8)}`,
-      bookingId,
-    );
+    if (companyShare > 0) {
+      await this.wallet.debit(
+        booking.assistantId,
+        companyShare,
+        `Liftoo share — cash booking ${bookingId.slice(0, 8)}`,
+        bookingId,
+      );
+    }
 
     return this.finalizePayment(bookingId, PaymentMethod.cash, customerId);
   }
@@ -726,8 +724,10 @@ export class BookingsService {
   ) {
     const payoutPercent =
       booking.category?.assistantPayoutPercent ?? settings.assistantEarningPercent;
-    const assistantEarning = Math.round(booking.serviceFee * (payoutPercent / 100));
-    const companyShare = Math.round(booking.totalAmount - assistantEarning);
+    let assistantEarning = Math.round(booking.serviceFee * (payoutPercent / 100));
+    const total = Math.round(booking.totalAmount);
+    if (assistantEarning > total) assistantEarning = total;
+    const companyShare = total - assistantEarning;
     return { assistantEarning, companyShare, payoutPercent };
   }
 
@@ -750,9 +750,7 @@ export class BookingsService {
     }
 
     const settings = await this.getSettings();
-    const assistantEarning =
-      booking.assistantEarningAmount ??
-      this.computePaymentSplit(booking, settings).assistantEarning;
+    const { assistantEarning, companyShare } = this.computePaymentSplit(booking, settings);
 
     await this.prisma.payment.upsert({
       where: { bookingId },
@@ -780,6 +778,8 @@ export class BookingsService {
       data: {
         paymentConfirmOtp: null,
         paymentOtpExpiresAt: null,
+        assistantEarningAmount: assistantEarning,
+        companyShareAmount: companyShare,
       },
       include: this.bookingInclude,
     });
@@ -844,8 +844,14 @@ export class BookingsService {
     ]);
     const busyAssistants = await this.busyAssistantIds();
 
+    const staleCutoff = new Date(Date.now() - 2 * 60 * 1000);
+    await this.prisma.assistantAvailability.updateMany({
+      where: { isOnline: true, updatedAt: { lt: staleCutoff } },
+      data: { isOnline: false },
+    });
+
     const online = await this.prisma.assistantAvailability.findMany({
-      where: { isOnline: true },
+      where: { isOnline: true, updatedAt: { gte: staleCutoff } },
       include: { user: { include: { assistantProfile: true } } },
     });
 

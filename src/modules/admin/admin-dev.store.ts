@@ -1,4 +1,4 @@
-import { UserRole, VerificationStatus, BookingStatus } from '@prisma/client';
+import { UserRole, VerificationStatus, BookingStatus, BroadcastAudience } from '@prisma/client';
 
 /** In-memory admin data when PostgreSQL is unavailable (local dev). */
 export class AdminDevStore {
@@ -165,6 +165,17 @@ export class AdminDevStore {
       user: { name: 'Rahul Sharma', phone: '9876543210' },
     },
   ];
+
+  broadcasts: {
+    id: string;
+    adminId: string;
+    audience: BroadcastAudience;
+    title: string;
+    body: string;
+    sentCount: number;
+    failCount: number;
+    createdAt: string;
+  }[] = [];
 
   referrals = [
     {

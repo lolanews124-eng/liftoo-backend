@@ -1,10 +1,14 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { PromoDiscountType } from '@prisma/client';
+import { PaymentStatus, PromoDiscountType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PlatformSettingsService } from '../settings/platform-settings.service';
 
 @Injectable()
 export class PromosService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private platformSettings: PlatformSettingsService,
+  ) {}
 
   async validate(code: string, orderAmount: number) {
     const promo = await this.prisma.promoCode.findUnique({
@@ -38,7 +42,10 @@ export class PromosService {
   }
 
   async applyToBooking(bookingId: string, code: string, customerId?: string) {
-    const booking = await this.prisma.booking.findUnique({ where: { id: bookingId } });
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { category: true, payment: true },
+    });
     if (!booking) throw new NotFoundException('Booking not found');
     if (customerId && booking.customerId !== customerId) {
       throw new ForbiddenException();
@@ -49,20 +56,36 @@ export class PromosService {
 
     const subtotal = booking.serviceFee + booking.platformFee;
     const result = await this.validate(code, subtotal);
+    const settings = await this.platformSettings.get();
+    const payoutPercent =
+      booking.category?.assistantPayoutPercent ?? settings.assistantEarningPercent;
+    let assistantEarning = Math.round(booking.serviceFee * (payoutPercent / 100));
+    const total = Math.round(result.finalAmount);
+    if (assistantEarning > total) assistantEarning = total;
+    const companyShare = total - assistantEarning;
 
     const updated = await this.prisma.$transaction(async (tx) => {
       await tx.promoCode.update({
         where: { id: result.promoId },
         data: { usedCount: { increment: 1 } },
       });
-      return tx.booking.update({
+      const row = await tx.booking.update({
         where: { id: bookingId },
         data: {
           promoCodeId: result.promoId,
           discountAmount: result.discountAmount,
           totalAmount: result.finalAmount,
+          assistantEarningAmount: assistantEarning,
+          companyShareAmount: companyShare,
         },
       });
+      if (booking.payment?.status === PaymentStatus.pending) {
+        await tx.payment.update({
+          where: { bookingId },
+          data: { amount: result.finalAmount },
+        });
+      }
+      return row;
     });
 
     return { booking: updated, ...result };

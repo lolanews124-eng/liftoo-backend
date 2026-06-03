@@ -5,6 +5,9 @@ import {
 } from '@nestjs/common';
 import {
   BookingStatus,
+  BroadcastAudience,
+  NotificationType,
+  PaymentStatus,
   Prisma,
   UserRole,
   VerificationStatus,
@@ -33,7 +36,9 @@ import {
   CreatePromoDto,
   ProcessPayoutDto,
   UpdateSupportTicketDto,
+  AdminBroadcastNotificationDto,
 } from './dto/admin.dto';
+import { NotificationsService } from '../notifications/notifications.service';
 import { AdminDevStore } from './admin-dev.store';
 
 @Injectable()
@@ -46,6 +51,7 @@ export class AdminService {
     private promos: PromosService,
     private payouts: PayoutsService,
     private support: SupportService,
+    private notifications: NotificationsService,
   ) {}
 
   private get dev() {
@@ -109,7 +115,7 @@ export class AdminService {
         where: { status: VerificationStatus.pending },
       }),
       this.prisma.payment.aggregate({
-        where: { status: 'completed' },
+        where: { status: PaymentStatus.completed },
         _sum: { amount: true },
       }),
       this.prisma.booking.aggregate({
@@ -123,7 +129,7 @@ export class AdminService {
       this.prisma.booking.count({
         where: {
           status: BookingStatus.completed,
-          OR: [{ payment: null }, { payment: { status: 'pending' } }],
+          OR: [{ payment: null }, { payment: { status: PaymentStatus.pending } }],
         },
       }),
       this.prisma.supportTicket.count({
@@ -406,7 +412,9 @@ export class AdminService {
     const and: Prisma.BookingWhereInput[] = [];
     if (query.paymentPending === 'true' || query.paymentPending === '1') {
       and.push({ status: BookingStatus.completed });
-      and.push({ OR: [{ payment: null }, { payment: { status: 'pending' } }] });
+      and.push({
+        OR: [{ payment: null }, { payment: { status: PaymentStatus.pending } }],
+      });
     } else if (query.status) {
       where.status = query.status;
     }
@@ -704,7 +712,8 @@ export class AdminService {
   }
 
   async updateSettings(dto: UpdatePlatformSettingsDto) {
-    return this.platformSettings.update(dto);
+    const { id: _id, ...data } = dto as UpdatePlatformSettingsDto & { id?: string };
+    return this.platformSettings.update(data);
   }
 
   async verifyAssistant(userId: string, adminId: string, dto: VerifyAssistantDto) {
@@ -725,6 +734,9 @@ export class AdminService {
   }
 
   async listRejections(query: PaginationQueryDto) {
+    if (this.useDev()) {
+      return { items: [], total: 0, page: query.page ?? 1, limit: 20 };
+    }
     const { take, skip } = this.paginate(query.page, query.limit);
     const [items, total] = await Promise.all([
       this.prisma.bookingRejection.findMany({
@@ -756,6 +768,21 @@ export class AdminService {
   }
 
   async getDashboardAnalytics() {
+    if (this.useDev()) {
+      const daily: { date: string; bookings: number; revenue: number; completed: number }[] = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        daily.push({
+          date: d.toISOString().slice(0, 10),
+          bookings: 1,
+          revenue: 275,
+          completed: 1,
+        });
+      }
+      return { daily };
+    }
+
     const days = 7;
     const start = new Date();
     start.setDate(start.getDate() - days + 1);
@@ -858,6 +885,115 @@ export class AdminService {
   }
 
   async listAuditLogs(query: PaginationQueryDto) {
+    if (this.useDev()) {
+      return { items: [], total: 0, page: query.page ?? 1, limit: query.limit ?? 20 };
+    }
     return this.auditLog.list(query.page, query.limit);
+  }
+
+  async broadcastNotification(adminId: string, dto: AdminBroadcastNotificationDto) {
+    const role =
+      dto.audience === BroadcastAudience.customer ? UserRole.customer : UserRole.assistant;
+
+    if (this.useDev()) {
+      const targets = this.dev.users.filter((u) => u.roles.includes(role));
+      const record = {
+        id: `bc-${Date.now()}`,
+        adminId,
+        audience: dto.audience,
+        title: dto.title,
+        body: dto.body,
+        sentCount: targets.length,
+        failCount: 0,
+        createdAt: new Date().toISOString(),
+      };
+      this.dev.broadcasts.unshift(record);
+      return {
+        broadcast: record,
+        audience: dto.audience,
+        targeted: targets.length,
+        sent: targets.length,
+        failed: 0,
+      };
+    }
+
+    const users = await this.prisma.user.findMany({
+      where: {
+        isSuspended: false,
+        roles: { has: role },
+      },
+      select: { id: true },
+    });
+
+    let sent = 0;
+    let failed = 0;
+    const batchSize = 30;
+    const payload = {
+      source: 'admin_broadcast',
+      audience: dto.audience,
+    };
+
+    for (let i = 0; i < users.length; i += batchSize) {
+      const chunk = users.slice(i, i + batchSize);
+      const results = await Promise.allSettled(
+        chunk.map((u) =>
+          this.notifications.create(u.id, {
+            type: NotificationType.admin_broadcast,
+            title: dto.title,
+            body: dto.body,
+            payload,
+          }),
+        ),
+      );
+      for (const r of results) {
+        if (r.status === 'fulfilled') sent += 1;
+        else failed += 1;
+      }
+    }
+
+    const broadcast = await this.prisma.adminBroadcast.create({
+      data: {
+        adminId,
+        audience: dto.audience,
+        title: dto.title,
+        body: dto.body,
+        sentCount: sent,
+        failCount: failed,
+      },
+    });
+
+    await this.auditLog.log(adminId, 'broadcast', 'notification', broadcast.id, {
+      audience: dto.audience,
+      sent,
+      failed,
+      targeted: users.length,
+    });
+
+    return {
+      broadcast,
+      audience: dto.audience,
+      targeted: users.length,
+      sent,
+      failed,
+    };
+  }
+
+  async listNotificationBroadcasts(query: PaginationQueryDto) {
+    if (this.useDev()) {
+      const { take, skip } = this.paginate(query.page, query.limit);
+      const items = this.dev.broadcasts.slice(skip, skip + take);
+      return { items, total: this.dev.broadcasts.length, page: query.page ?? 1, limit: take };
+    }
+
+    const { take, skip } = this.paginate(query.page, query.limit);
+    const [items, total] = await Promise.all([
+      this.prisma.adminBroadcast.findMany({
+        skip,
+        take,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.adminBroadcast.count(),
+    ]);
+    return { items, total, page: query.page ?? 1, limit: take };
   }
 }
