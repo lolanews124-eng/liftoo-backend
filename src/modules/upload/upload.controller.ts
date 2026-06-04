@@ -10,6 +10,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { extname, join } from 'path';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { randomBytes } from 'crypto';
+import { ConfigService } from '@nestjs/config';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser, JwtPayload } from '../../common/decorators/current-user.decorator';
 
@@ -22,6 +23,8 @@ function ensureUploadDir() {
 @Controller('api/v1/upload')
 @UseGuards(JwtAuthGuard)
 export class UploadController {
+  constructor(private config: ConfigService) {}
+
   @Post('file')
   @UseInterceptors(FileInterceptor('file'))
   uploadFile(
@@ -42,7 +45,10 @@ export class UploadController {
     const filename = `${Date.now()}-${randomBytes(6).toString('hex')}${ext}`;
     writeFileSync(join(uploadDir, filename), file.buffer);
 
-    const baseUrl = process.env.API_PUBLIC_URL ?? 'http://localhost:3000';
+    const baseUrl = (this.config.get<string>('API_PUBLIC_URL') ?? 'https://api.liftoo.in').replace(
+      /\/$/,
+      '',
+    );
     return {
       url: `${baseUrl}/uploads/${filename}`,
       filename,
