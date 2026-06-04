@@ -308,6 +308,73 @@ export class UpdateSupportTicketDto {
   adminReply?: string;
 }
 
+export class CreateHomeFeedAdDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  title?: string;
+
+  @IsString()
+  imageUrl: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  buttonLabel?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  buttonLink?: string;
+
+  @IsOptional()
+  @IsIn(['url', 'route'])
+  buttonAction?: 'url' | 'route';
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  sortOrder?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+}
+
+export class UpdateHomeFeedAdDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  title?: string;
+
+  @IsOptional()
+  @IsString()
+  imageUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  buttonLabel?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  buttonLink?: string;
+
+  @IsOptional()
+  @IsIn(['url', 'route'])
+  buttonAction?: 'url' | 'route';
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  sortOrder?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+}
+
 export class AdminBroadcastNotificationDto {
   @IsEnum(BroadcastAudience)
   audience: BroadcastAudience;

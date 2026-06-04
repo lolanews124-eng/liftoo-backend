@@ -23,6 +23,7 @@ import { SupportModule } from './modules/support/support.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { GeocodeModule } from './modules/geocode/geocode.module';
+import { HomeFeedAdsModule } from './modules/home-feed-ads/home-feed-ads.module';
 
 @Module({
   imports: [
@@ -58,6 +59,7 @@ import { GeocodeModule } from './modules/geocode/geocode.module';
     ChatModule,
     UploadModule,
     GeocodeModule,
+    HomeFeedAdsModule,
   ],
 })
 export class AppModule {}

@@ -56,7 +56,20 @@ export class PushNotificationService implements OnModuleInit {
         data: payload.data,
         android: {
           priority: 'high',
-          notification: { channelId: 'liftoo_default' },
+          notification: {
+            channelId: 'liftoo_alerts',
+            defaultSound: true,
+            defaultVibrateTimings: true,
+            visibility: 'public',
+          },
+        },
+        apns: {
+          payload: {
+            aps: {
+              sound: 'default',
+              'content-available': 1,
+            },
+          },
         },
       });
       return { sent: true };

@@ -37,8 +37,11 @@ import {
   ProcessPayoutDto,
   UpdateSupportTicketDto,
   AdminBroadcastNotificationDto,
+  CreateHomeFeedAdDto,
+  UpdateHomeFeedAdDto,
 } from './dto/admin.dto';
 import { NotificationsService } from '../notifications/notifications.service';
+import { HomeFeedAdsService } from '../home-feed-ads/home-feed-ads.service';
 
 @Injectable()
 export class AdminService {
@@ -51,6 +54,7 @@ export class AdminService {
     private payouts: PayoutsService,
     private support: SupportService,
     private notifications: NotificationsService,
+    private homeFeedAds: HomeFeedAdsService,
   ) {}
 
 
@@ -795,5 +799,33 @@ export class AdminService {
       }
       throw e;
     }
+  }
+
+  listHomeFeedAds() {
+    return this.homeFeedAds.listAll();
+  }
+
+  async createHomeFeedAd(adminId: string, dto: CreateHomeFeedAdDto) {
+    const ad = await this.homeFeedAds.create(dto);
+    await this.auditLog.log(adminId, 'create', 'home_feed_ad', ad.id);
+    return ad;
+  }
+
+  async updateHomeFeedAd(adminId: string, id: string, dto: UpdateHomeFeedAdDto) {
+    const ad = await this.homeFeedAds.update(id, dto);
+    await this.auditLog.log(adminId, 'update', 'home_feed_ad', id);
+    return ad;
+  }
+
+  async toggleHomeFeedAd(adminId: string, id: string, isActive: boolean) {
+    const ad = await this.homeFeedAds.setActive(id, isActive);
+    await this.auditLog.log(adminId, isActive ? 'activate' : 'deactivate', 'home_feed_ad', id);
+    return ad;
+  }
+
+  async deleteHomeFeedAd(adminId: string, id: string) {
+    await this.homeFeedAds.remove(id);
+    await this.auditLog.log(adminId, 'delete', 'home_feed_ad', id);
+    return { deleted: true };
   }
 }

@@ -34,6 +34,8 @@ import {
   ProcessPayoutDto,
   UpdateSupportTicketDto,
   AdminBroadcastNotificationDto,
+  CreateHomeFeedAdDto,
+  UpdateHomeFeedAdDto,
 } from './dto/admin.dto';
 
 @Controller('api/v1/admin')
@@ -213,6 +215,44 @@ export class AdminController {
   @UseGuards(JwtAuthGuard, AdminGuard)
   listReferrals(@Query() query: PaginationQueryDto) {
     return this.adminService.listReferrals(query);
+  }
+
+  @Get('home-feed-ads')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  listHomeFeedAds() {
+    return this.adminService.listHomeFeedAds();
+  }
+
+  @Post('home-feed-ads')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  createHomeFeedAd(@CurrentUser('sub') adminId: string, @Body() dto: CreateHomeFeedAdDto) {
+    return this.adminService.createHomeFeedAd(adminId, dto);
+  }
+
+  @Patch('home-feed-ads/:id')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  updateHomeFeedAd(
+    @CurrentUser('sub') adminId: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateHomeFeedAdDto,
+  ) {
+    return this.adminService.updateHomeFeedAd(adminId, id, dto);
+  }
+
+  @Patch('home-feed-ads/:id/toggle')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  toggleHomeFeedAd(
+    @CurrentUser('sub') adminId: string,
+    @Param('id') id: string,
+    @Body('isActive') isActive: boolean,
+  ) {
+    return this.adminService.toggleHomeFeedAd(adminId, id, isActive);
+  }
+
+  @Delete('home-feed-ads/:id')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  deleteHomeFeedAd(@CurrentUser('sub') adminId: string, @Param('id') id: string) {
+    return this.adminService.deleteHomeFeedAd(adminId, id);
   }
 
   @Get('settings')

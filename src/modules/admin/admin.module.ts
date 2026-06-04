@@ -8,9 +8,10 @@ import { PromosModule } from '../promos/promos.module';
 import { PayoutsModule } from '../payouts/payouts.module';
 import { SupportModule } from '../support/support.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { HomeFeedAdsModule } from '../home-feed-ads/home-feed-ads.module';
 
 @Module({
-  imports: [AssistantsModule, PromosModule, PayoutsModule, SupportModule, NotificationsModule],
+  imports: [AssistantsModule, PromosModule, PayoutsModule, SupportModule, NotificationsModule, HomeFeedAdsModule],
   controllers: [AdminController],
   providers: [AdminService, AdminAuthService, AuditLogService],
 })
