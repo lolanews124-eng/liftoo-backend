@@ -986,14 +986,22 @@ export class AdminService {
     }
 
     const { take, skip } = this.paginate(query.page, query.limit);
-    const [items, total] = await Promise.all([
-      this.prisma.adminBroadcast.findMany({
-        skip,
-        take,
-        orderBy: { createdAt: 'desc' },
-      }),
-      this.prisma.adminBroadcast.count(),
-    ]);
-    return { items, total, page: query.page ?? 1, limit: take };
+    try {
+      const [items, total] = await Promise.all([
+        this.prisma.adminBroadcast.findMany({
+          skip,
+          take,
+          orderBy: { createdAt: 'desc' },
+        }),
+        this.prisma.adminBroadcast.count(),
+      ]);
+      return { items, total, page: query.page ?? 1, limit: take };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes('admin_broadcasts') || msg.includes('does not exist')) {
+        return { items: [], total: 0, page: query.page ?? 1, limit: take };
+      }
+      throw e;
+    }
   }
 }
