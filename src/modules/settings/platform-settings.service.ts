@@ -17,6 +17,22 @@ export type PlatformSettingsData = {
   minAssistantSettlementBalance: number;
 };
 
+export type AdminPlatformSettingsData = {
+  id: string;
+  configured: boolean;
+  matchRadiusKm: number | null;
+  signupWalletBonus: number | null;
+  referralRewardAmount: number | null;
+  assistantEarningPercent: number | null;
+  matchBatchSize: number | null;
+  platformFeePercent: number | null;
+  bookingSearchTimeoutMin: number | null;
+  cancellationFreeBeforeMin: number | null;
+  cancellationFeePercent: number | null;
+  minCancellationFee: number | null;
+  minAssistantSettlementBalance: number | null;
+};
+
 @Injectable()
 export class PlatformSettingsService implements OnModuleInit {
   private cache: PlatformSettingsData | null = null;
@@ -34,7 +50,8 @@ export class PlatformSettingsService implements OnModuleInit {
     await this.ensureDefaults();
   }
 
-  private defaults() {
+  /** Runtime fallbacks (env) until admin saves settings in the panel. */
+  private defaults(): PlatformSettingsData {
     return {
       id: 'default',
       matchRadiusKm: Number(this.config.get('MATCH_RADIUS_KM', 15)),
@@ -53,28 +70,112 @@ export class PlatformSettingsService implements OnModuleInit {
     };
   }
 
+  private emptyAdminPayload(id: string): AdminPlatformSettingsData {
+    return {
+      id,
+      configured: false,
+      matchRadiusKm: null,
+      signupWalletBonus: null,
+      referralRewardAmount: null,
+      assistantEarningPercent: null,
+      matchBatchSize: null,
+      platformFeePercent: null,
+      bookingSearchTimeoutMin: null,
+      cancellationFreeBeforeMin: null,
+      cancellationFeePercent: null,
+      minCancellationFee: null,
+      minAssistantSettlementBalance: null,
+    };
+  }
+
+  private rowToRuntime(row: {
+    id: string;
+    matchRadiusKm: number;
+    signupWalletBonus: number;
+    referralRewardAmount: number;
+    assistantEarningPercent: number;
+    matchBatchSize: number;
+    platformFeePercent: number;
+    bookingSearchTimeoutMin: number;
+    cancellationFreeBeforeMin: number;
+    cancellationFeePercent: number;
+    minCancellationFee: number;
+    minAssistantSettlementBalance: number;
+  }): PlatformSettingsData {
+    return {
+      id: row.id,
+      matchRadiusKm: row.matchRadiusKm,
+      signupWalletBonus: row.signupWalletBonus,
+      referralRewardAmount: row.referralRewardAmount,
+      assistantEarningPercent: row.assistantEarningPercent,
+      matchBatchSize: row.matchBatchSize,
+      platformFeePercent: row.platformFeePercent,
+      bookingSearchTimeoutMin: row.bookingSearchTimeoutMin,
+      cancellationFreeBeforeMin: row.cancellationFreeBeforeMin,
+      cancellationFeePercent: row.cancellationFeePercent,
+      minCancellationFee: row.minCancellationFee,
+      minAssistantSettlementBalance: row.minAssistantSettlementBalance,
+    };
+  }
+
+  private rowToAdmin(row: {
+    id: string;
+    settingsConfigured: boolean;
+    matchRadiusKm: number;
+    signupWalletBonus: number;
+    referralRewardAmount: number;
+    assistantEarningPercent: number;
+    matchBatchSize: number;
+    platformFeePercent: number;
+    bookingSearchTimeoutMin: number;
+    cancellationFreeBeforeMin: number;
+    cancellationFeePercent: number;
+    minCancellationFee: number;
+    minAssistantSettlementBalance: number;
+  }): AdminPlatformSettingsData {
+    if (!row.settingsConfigured) {
+      return this.emptyAdminPayload(row.id);
+    }
+    return {
+      id: row.id,
+      configured: true,
+      matchRadiusKm: row.matchRadiusKm,
+      signupWalletBonus: row.signupWalletBonus,
+      referralRewardAmount: row.referralRewardAmount,
+      assistantEarningPercent: row.assistantEarningPercent,
+      matchBatchSize: row.matchBatchSize,
+      platformFeePercent: row.platformFeePercent,
+      bookingSearchTimeoutMin: row.bookingSearchTimeoutMin,
+      cancellationFreeBeforeMin: row.cancellationFreeBeforeMin,
+      cancellationFeePercent: row.cancellationFeePercent,
+      minCancellationFee: row.minCancellationFee,
+      minAssistantSettlementBalance: row.minAssistantSettlementBalance,
+    };
+  }
+
   async ensureDefaults() {
     if (!this.prisma.dbReady) {
       this.cache = this.defaults();
       return;
     }
-    const d = this.defaults();
+    const year = new Date().getFullYear();
     await this.prisma.platformSettings.upsert({
       where: { id: 'default' },
       create: {
         id: 'default',
-        matchRadiusKm: d.matchRadiusKm,
-        signupWalletBonus: d.signupWalletBonus,
-        referralRewardAmount: d.referralRewardAmount,
-        assistantEarningPercent: d.assistantEarningPercent,
-        matchBatchSize: d.matchBatchSize,
-        platformFeePercent: d.platformFeePercent,
-        bookingSearchTimeoutMin: d.bookingSearchTimeoutMin,
-        cancellationFreeBeforeMin: d.cancellationFreeBeforeMin,
-        cancellationFeePercent: d.cancellationFeePercent,
-        minCancellationFee: d.minCancellationFee,
-        minAssistantSettlementBalance: d.minAssistantSettlementBalance,
-        assistantCodeYear: new Date().getFullYear(),
+        matchRadiusKm: 0,
+        signupWalletBonus: 0,
+        referralRewardAmount: 0,
+        assistantEarningPercent: 0,
+        matchBatchSize: 0,
+        platformFeePercent: 0,
+        bookingSearchTimeoutMin: 0,
+        cancellationFreeBeforeMin: 0,
+        cancellationFeePercent: 0,
+        minCancellationFee: 0,
+        minAssistantSettlementBalance: 0,
+        settingsConfigured: false,
+        assistantCodeYear: year,
         assistantCodeSeq: 0,
       },
       update: {},
@@ -92,53 +193,49 @@ export class PlatformSettingsService implements OnModuleInit {
       await this.ensureDefaults();
       return this.get();
     }
-    this.cache = {
-      id: row.id,
-      matchRadiusKm: row.matchRadiusKm,
-      signupWalletBonus: row.signupWalletBonus,
-      referralRewardAmount: row.referralRewardAmount,
-      assistantEarningPercent: row.assistantEarningPercent,
-      matchBatchSize: row.matchBatchSize,
-      platformFeePercent: row.platformFeePercent,
-      bookingSearchTimeoutMin: row.bookingSearchTimeoutMin,
-      cancellationFreeBeforeMin: row.cancellationFreeBeforeMin,
-      cancellationFeePercent: row.cancellationFeePercent,
-      minCancellationFee: row.minCancellationFee,
-      minAssistantSettlementBalance:
-        (row as { minAssistantSettlementBalance?: number }).minAssistantSettlementBalance ?? 150,
-    };
+    if (!row.settingsConfigured) {
+      this.cache = this.defaults();
+      return this.cache;
+    }
+    this.cache = this.rowToRuntime(row);
     return this.cache;
   }
 
+  /** Used by app/API — env defaults apply until admin has saved settings. */
   async get(): Promise<PlatformSettingsData> {
     if (this.cache) return this.cache;
     return this.refreshCache();
   }
 
+  /** Used by admin panel — empty fields until first save. */
+  async getForAdmin(): Promise<AdminPlatformSettingsData> {
+    if (!this.prisma.dbReady) {
+      return this.emptyAdminPayload('default');
+    }
+    let row = await this.prisma.platformSettings.findUnique({ where: { id: 'default' } });
+    if (!row) {
+      await this.ensureDefaults();
+      row = await this.prisma.platformSettings.findUnique({ where: { id: 'default' } });
+    }
+    if (!row) return this.emptyAdminPayload('default');
+    return this.rowToAdmin(row);
+  }
+
   async update(data: Partial<Omit<PlatformSettingsData, 'id'>>) {
     if (!this.prisma.dbReady) {
       this.cache = { ...this.defaults(), ...this.cache, ...data };
-      return this.cache;
+      return this.rowToAdmin({
+        id: 'default',
+        settingsConfigured: true,
+        ...this.cache,
+      });
     }
     const updated = await this.prisma.platformSettings.update({
       where: { id: 'default' },
-      data,
+      data: { ...data, settingsConfigured: true },
     });
-    this.cache = {
-      id: updated.id,
-      matchRadiusKm: updated.matchRadiusKm,
-      signupWalletBonus: updated.signupWalletBonus,
-      referralRewardAmount: updated.referralRewardAmount,
-      assistantEarningPercent: updated.assistantEarningPercent,
-      matchBatchSize: updated.matchBatchSize,
-      platformFeePercent: updated.platformFeePercent,
-      bookingSearchTimeoutMin: updated.bookingSearchTimeoutMin,
-      cancellationFreeBeforeMin: updated.cancellationFreeBeforeMin,
-      cancellationFeePercent: updated.cancellationFeePercent,
-      minCancellationFee: updated.minCancellationFee,
-      minAssistantSettlementBalance: updated.minAssistantSettlementBalance,
-    };
-    return this.cache;
+    this.cache = this.rowToRuntime(updated);
+    return this.rowToAdmin(updated);
   }
 
   async generateAssistantCode(): Promise<string> {
@@ -151,6 +248,7 @@ export class PlatformSettingsService implements OnModuleInit {
       where: { id: 'default' },
       create: {
         id: 'default',
+        settingsConfigured: false,
         assistantCodeYear: year,
         assistantCodeSeq: 1,
       },

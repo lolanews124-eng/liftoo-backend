@@ -708,7 +708,7 @@ export class AdminService {
   }
 
   async getSettings() {
-    return this.platformSettings.get();
+    return this.platformSettings.getForAdmin();
   }
 
   async updateSettings(dto: UpdatePlatformSettingsDto) {

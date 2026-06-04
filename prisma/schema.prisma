@@ -437,6 +437,7 @@ model PlatformSettings {
   cancellationFeePercent Float  @default(10) @map("cancellation_fee_percent")
   minCancellationFee     Float   @default(50) @map("min_cancellation_fee")
   minAssistantSettlementBalance Float @default(150) @map("min_assistant_settlement_balance")
+  settingsConfigured     Boolean  @default(false) @map("settings_configured")
   assistantCodeYear      Int      @default(2026) @map("assistant_code_year")
   assistantCodeSeq       Int      @default(0) @map("assistant_code_seq")
   updatedAt              DateTime @updatedAt @map("updated_at")
