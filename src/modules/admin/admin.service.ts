@@ -39,7 +39,6 @@ import {
   AdminBroadcastNotificationDto,
 } from './dto/admin.dto';
 import { NotificationsService } from '../notifications/notifications.service';
-import { AdminDevStore } from './admin-dev.store';
 
 @Injectable()
 export class AdminService {
@@ -54,13 +53,7 @@ export class AdminService {
     private notifications: NotificationsService,
   ) {}
 
-  private get dev() {
-    return AdminDevStore.getInstance();
-  }
 
-  private useDev() {
-    return !this.prisma.dbReady;
-  }
 
   private paginate(page = 1, limit = 20) {
     const take = Math.min(limit, 100);
@@ -69,19 +62,7 @@ export class AdminService {
   }
 
   async getDashboardStats() {
-    if (this.useDev()) {
-      return {
-        users: { total: this.dev.users.length, customers: 1, assistants: 2 },
-        bookings: { total: this.dev.bookings.length, active: 1, completed: 1 },
-        pendingVerifications: 2,
-        revenue: { total: 275, platform: 27.5, pendingPayouts: 220 },
-        pendingPayments: 0,
-        openSupportTickets: 0,
-        recentBookings: this.dev.bookings,
-      };
-    }
-
-    const [
+        const [
       totalCustomers,
       totalAssistants,
       totalBookings,
@@ -170,19 +151,7 @@ export class AdminService {
   }
 
   async listUsers(query: AdminUsersQueryDto) {
-    if (this.useDev()) {
-      let items = [...this.dev.users];
-      if (query.role) items = items.filter((u) => u.roles.includes(query.role as UserRole));
-      if (query.search) {
-        const q = query.search.toLowerCase();
-        items = items.filter(
-          (u) => u.name?.toLowerCase().includes(q) || u.phone.includes(q),
-        );
-      }
-      return { items, total: items.length, page: query.page ?? 1, limit: 20 };
-    }
-
-    const { take, skip } = this.paginate(query.page, query.limit);
+        const { take, skip } = this.paginate(query.page, query.limit);
     const where: Prisma.UserWhereInput = {
       roles: { hasSome: [UserRole.customer, UserRole.assistant] },
     };
@@ -241,13 +210,7 @@ export class AdminService {
   }
 
   async getUser(id: string) {
-    if (this.useDev()) {
-      const user = this.dev.users.find((u) => u.id === id);
-      if (!user) throw new NotFoundException('User not found');
-      return { ...user, wallet: { balance: user.walletBalance, transactions: [] } };
-    }
-
-    const user = await this.prisma.user.findUnique({
+        const user = await this.prisma.user.findUnique({
       where: { id },
       include: {
         wallet: { include: { transactions: { take: 10, orderBy: { createdAt: 'desc' } } } },
@@ -272,15 +235,7 @@ export class AdminService {
   }
 
   async updateUser(id: string, dto: UpdateAdminUserDto) {
-    if (this.useDev()) {
-      const user = this.dev.users.find((u) => u.id === id);
-      if (!user) throw new NotFoundException('User not found');
-      if (dto.name != null) user.name = dto.name;
-      if (dto.isSuspended != null) user.isSuspended = dto.isSuspended;
-      return user;
-    }
-
-    await this.getUser(id);
+        await this.getUser(id);
     const updated = await this.prisma.user.update({
       where: { id },
       data: {
@@ -305,16 +260,7 @@ export class AdminService {
   }
 
   async listVerifications(query: AdminVerificationsQueryDto) {
-    if (this.useDev()) {
-      return {
-        items: this.dev.verifications,
-        total: this.dev.verifications.length,
-        page: query.page ?? 1,
-        limit: 20,
-      };
-    }
-
-    const { take, skip } = this.paginate(query.page, query.limit);
+        const { take, skip } = this.paginate(query.page, query.limit);
     const status = query.status ?? VerificationStatus.pending;
 
     const docs = await this.prisma.assistantVerificationDocument.findMany({
@@ -362,18 +308,7 @@ export class AdminService {
   }
 
   async getVerification(userId: string) {
-    if (this.useDev()) {
-      const user = this.dev.users.find((u) => u.id === userId);
-      if (!user) throw new NotFoundException('User not found');
-      const detail = this.dev.verificationDetails[userId];
-      return {
-        user: { id: user.id, name: user.name, phone: user.phone },
-        documents: detail?.documents ?? [],
-        summary: detail?.summary ?? { completionPercent: 0, fullyVerified: false, pendingCount: 0 },
-      };
-    }
-
-    const user = await this.prisma.user.findUnique({
+        const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { id: true, name: true, phone: true, avatarUrl: true },
     });
@@ -383,31 +318,14 @@ export class AdminService {
   }
 
   async reviewVerification(adminId: string, dto: AdminReviewVerificationDto) {
-    if (this.useDev()) {
-      const detail = this.dev.verificationDetails[dto.userId];
-      if (!detail) throw new NotFoundException('Verification not found');
-      const doc = detail.documents.find((d: { type: string }) => d.type === dto.type) as
-        | { type: string; status: string }
-        | undefined;
-      if (!doc) throw new NotFoundException('Document not found');
-      doc.status = dto.status;
-      return this.getVerification(dto.userId);
-    }
-
-    return this.verificationService.reviewDocument({
+        return this.verificationService.reviewDocument({
       ...dto,
       verifiedBy: adminId,
     });
   }
 
   async listBookings(query: AdminBookingsQueryDto) {
-    if (this.useDev()) {
-      let items = [...this.dev.bookings];
-      if (query.status) items = items.filter((b) => b.status === query.status);
-      return { items, total: items.length, page: query.page ?? 1, limit: 20 };
-    }
-
-    const { take, skip } = this.paginate(query.page, query.limit);
+        const { take, skip } = this.paginate(query.page, query.limit);
     const where: Prisma.BookingWhereInput = {};
     const and: Prisma.BookingWhereInput[] = [];
     if (query.paymentPending === 'true' || query.paymentPending === '1') {
@@ -449,20 +367,7 @@ export class AdminService {
   }
 
   async getBooking(id: string) {
-    if (this.useDev()) {
-      const booking = this.dev.bookings.find((b) => b.id === id);
-      if (!booking) throw new NotFoundException('Booking not found');
-      return {
-        ...booking,
-        durationMin: 60,
-        serviceFee: 300,
-        platformFee: 30,
-        addressFormatted: 'Phoenix Mall, Lower Parel, Mumbai',
-        statusHistory: [{ status: booking.status, createdAt: booking.createdAt }],
-      };
-    }
-
-    const booking = await this.prisma.booking.findUnique({
+        const booking = await this.prisma.booking.findUnique({
       where: { id },
       include: {
         category: true,
@@ -494,14 +399,7 @@ export class AdminService {
   }
 
   async updateBookingStatus(id: string, dto: UpdateBookingStatusDto) {
-    if (this.useDev()) {
-      const booking = this.dev.bookings.find((b) => b.id === id);
-      if (!booking) throw new NotFoundException('Booking not found');
-      booking.status = dto.status as typeof booking.status;
-      return this.getBooking(id);
-    }
-
-    const booking = await this.getBooking(id);
+        const booking = await this.getBooking(id);
     if (booking.status === dto.status) return booking;
 
     return this.prisma.booking.update({
@@ -523,72 +421,38 @@ export class AdminService {
   }
 
   async listCategories() {
-    if (this.useDev()) return this.dev.categories;
     return this.prisma.serviceCategory.findMany({ orderBy: { name: 'asc' } });
   }
 
   async createCategory(dto: CreateCategoryDto) {
-    if (this.useDev()) {
-      const cat = { id: `c${Date.now()}`, ...dto, isActive: dto.isActive ?? true };
-      this.dev.categories.push(cat as never);
-      return cat;
-    }
-    return this.prisma.serviceCategory.create({ data: dto });
+        return this.prisma.serviceCategory.create({ data: dto });
   }
 
   async updateCategory(id: string, dto: UpdateCategoryDto) {
-    if (this.useDev()) {
-      const cat = this.dev.categories.find((c) => c.id === id);
-      if (!cat) throw new NotFoundException('Category not found');
-      Object.assign(cat, dto);
-      return cat;
-    }
-    return this.prisma.serviceCategory.update({ where: { id }, data: dto });
+        return this.prisma.serviceCategory.update({ where: { id }, data: dto });
   }
 
   async deleteCategory(id: string) {
-    if (this.useDev()) {
-      const cat = this.dev.categories.find((c) => c.id === id);
-      if (!cat) throw new NotFoundException('Category not found');
-      cat.isActive = false;
-      return cat;
-    }
-    return this.prisma.serviceCategory.update({
+        return this.prisma.serviceCategory.update({
       where: { id },
       data: { isActive: false },
     });
   }
 
   async listCities() {
-    if (this.useDev()) return this.dev.cities;
     return this.prisma.city.findMany({ orderBy: { name: 'asc' } });
   }
 
   async createCity(dto: CreateCityDto) {
-    if (this.useDev()) {
-      const city = { id: `city${Date.now()}`, ...dto, isActive: dto.isActive ?? true };
-      this.dev.cities.push(city as never);
-      return city;
-    }
-    return this.prisma.city.create({ data: dto });
+        return this.prisma.city.create({ data: dto });
   }
 
   async updateCity(id: string, dto: UpdateCityDto) {
-    if (this.useDev()) {
-      const city = this.dev.cities.find((c) => c.id === id);
-      if (!city) throw new NotFoundException('City not found');
-      Object.assign(city, dto);
-      return city;
-    }
-    return this.prisma.city.update({ where: { id }, data: dto });
+        return this.prisma.city.update({ where: { id }, data: dto });
   }
 
   async listPayments(query: PaginationQueryDto) {
-    if (this.useDev()) {
-      return { items: this.dev.payments, total: this.dev.payments.length, page: 1, limit: 20 };
-    }
-
-    const { take, skip } = this.paginate(query.page, query.limit);
+        const { take, skip } = this.paginate(query.page, query.limit);
     const [items, total] = await Promise.all([
       this.prisma.payment.findMany({
         skip,
@@ -609,11 +473,7 @@ export class AdminService {
   }
 
   async listEarnings(query: PaginationQueryDto) {
-    if (this.useDev()) {
-      return { items: this.dev.earnings, total: this.dev.earnings.length, page: 1, limit: 20 };
-    }
-
-    const { take, skip } = this.paginate(query.page, query.limit);
+        const { take, skip } = this.paginate(query.page, query.limit);
     const [items, total] = await Promise.all([
       this.prisma.earning.findMany({
         skip,
@@ -629,14 +489,7 @@ export class AdminService {
   }
 
   async markEarningPaidOut(id: string) {
-    if (this.useDev()) {
-      const e = this.dev.earnings.find((x) => x.id === id);
-      if (!e) throw new NotFoundException('Earning not found');
-      e.isPaidOut = true;
-      return e;
-    }
-
-    const earning = await this.prisma.earning.findUnique({ where: { id } });
+        const earning = await this.prisma.earning.findUnique({ where: { id } });
     if (!earning) throw new NotFoundException('Earning not found');
     return this.prisma.earning.update({
       where: { id },
@@ -645,11 +498,7 @@ export class AdminService {
   }
 
   async listRatings(query: PaginationQueryDto) {
-    if (this.useDev()) {
-      return { items: this.dev.ratings, total: this.dev.ratings.length, page: 1, limit: 20 };
-    }
-
-    const { take, skip } = this.paginate(query.page, query.limit);
+        const { take, skip } = this.paginate(query.page, query.limit);
     const [items, total] = await Promise.all([
       this.prisma.rating.findMany({
         skip,
@@ -667,11 +516,7 @@ export class AdminService {
   }
 
   async listAppReviews(query: PaginationQueryDto) {
-    if (this.useDev()) {
-      return { items: this.dev.appReviews, total: this.dev.appReviews.length, page: 1, limit: 20 };
-    }
-
-    const { take, skip } = this.paginate(query.page, query.limit);
+        const { take, skip } = this.paginate(query.page, query.limit);
     const [items, total] = await Promise.all([
       this.prisma.appReview.findMany({
         skip,
@@ -687,11 +532,7 @@ export class AdminService {
   }
 
   async listReferrals(query: PaginationQueryDto) {
-    if (this.useDev()) {
-      return { items: this.dev.referrals, total: this.dev.referrals.length, page: 1, limit: 20 };
-    }
-
-    const { take, skip } = this.paginate(query.page, query.limit);
+        const { take, skip } = this.paginate(query.page, query.limit);
     const [items, total] = await Promise.all([
       this.prisma.referral.findMany({
         skip,
@@ -734,10 +575,7 @@ export class AdminService {
   }
 
   async listRejections(query: PaginationQueryDto) {
-    if (this.useDev()) {
-      return { items: [], total: 0, page: query.page ?? 1, limit: 20 };
-    }
-    const { take, skip } = this.paginate(query.page, query.limit);
+        const { take, skip } = this.paginate(query.page, query.limit);
     const [items, total] = await Promise.all([
       this.prisma.bookingRejection.findMany({
         skip,
@@ -768,22 +606,7 @@ export class AdminService {
   }
 
   async getDashboardAnalytics() {
-    if (this.useDev()) {
-      const daily: { date: string; bookings: number; revenue: number; completed: number }[] = [];
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        daily.push({
-          date: d.toISOString().slice(0, 10),
-          bookings: 1,
-          revenue: 275,
-          completed: 1,
-        });
-      }
-      return { daily };
-    }
-
-    const days = 7;
+        const days = 7;
     const start = new Date();
     start.setDate(start.getDate() - days + 1);
     start.setHours(0, 0, 0, 0);
@@ -885,39 +708,14 @@ export class AdminService {
   }
 
   async listAuditLogs(query: PaginationQueryDto) {
-    if (this.useDev()) {
-      return { items: [], total: 0, page: query.page ?? 1, limit: query.limit ?? 20 };
-    }
-    return this.auditLog.list(query.page, query.limit);
+        return this.auditLog.list(query.page, query.limit);
   }
 
   async broadcastNotification(adminId: string, dto: AdminBroadcastNotificationDto) {
     const role =
       dto.audience === BroadcastAudience.customer ? UserRole.customer : UserRole.assistant;
 
-    if (this.useDev()) {
-      const targets = this.dev.users.filter((u) => u.roles.includes(role));
-      const record = {
-        id: `bc-${Date.now()}`,
-        adminId,
-        audience: dto.audience,
-        title: dto.title,
-        body: dto.body,
-        sentCount: targets.length,
-        failCount: 0,
-        createdAt: new Date().toISOString(),
-      };
-      this.dev.broadcasts.unshift(record);
-      return {
-        broadcast: record,
-        audience: dto.audience,
-        targeted: targets.length,
-        sent: targets.length,
-        failed: 0,
-      };
-    }
-
-    const users = await this.prisma.user.findMany({
+        const users = await this.prisma.user.findMany({
       where: {
         isSuspended: false,
         roles: { has: role },
@@ -979,13 +777,7 @@ export class AdminService {
   }
 
   async listNotificationBroadcasts(query: PaginationQueryDto) {
-    if (this.useDev()) {
-      const { take, skip } = this.paginate(query.page, query.limit);
-      const items = this.dev.broadcasts.slice(skip, skip + take);
-      return { items, total: this.dev.broadcasts.length, page: query.page ?? 1, limit: take };
-    }
-
-    const { take, skip } = this.paginate(query.page, query.limit);
+        const { take, skip } = this.paginate(query.page, query.limit);
     try {
       const [items, total] = await Promise.all([
         this.prisma.adminBroadcast.findMany({

@@ -1,11 +1,10 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { hashPassword, verifyPassword } from '../../common/utils/password.util';
 import { AdminLoginDto } from './dto/admin.dto';
-import { AdminDevStore } from './admin-dev.store';
 
 @Injectable()
 export class AdminAuthService {
@@ -15,20 +14,14 @@ export class AdminAuthService {
     private config: ConfigService,
   ) {}
 
-  async login(dto: AdminLoginDto) {
+  private assertDbReady() {
     if (!this.prisma.dbReady) {
-      const devUser = AdminDevStore.getInstance().devLogin(
-        dto.email.toLowerCase(),
-        dto.password,
-      );
-      if (!devUser) throw new UnauthorizedException('Invalid credentials');
-      const tokens = await this.generateTokens(
-        devUser.id,
-        devUser.phone,
-        UserRole.admin,
-      );
-      return { ...tokens, user: devUser };
+      throw new ServiceUnavailableException('Database is unavailable. Try again shortly.');
     }
+  }
+
+  async login(dto: AdminLoginDto) {
+    this.assertDbReady();
 
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email.toLowerCase() },
@@ -53,11 +46,7 @@ export class AdminAuthService {
   }
 
   async me(userId: string) {
-    if (!this.prisma.dbReady) {
-      const dev = AdminDevStore.getInstance().adminUser;
-      if (userId !== dev.id) throw new UnauthorizedException();
-      return dev;
-    }
+    this.assertDbReady();
 
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user || !user.roles.includes(UserRole.admin)) {

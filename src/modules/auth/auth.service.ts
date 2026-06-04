@@ -31,15 +31,8 @@ export class AuthService {
     return email.trim().toLowerCase();
   }
 
-  private isDevOtpMode() {
-    const v = this.config.get('OTP_DEV_MODE');
-    return v === 'true' || v === true;
-  }
-
   private generateOtp() {
-    return this.isDevOtpMode()
-      ? '123456'
-      : String(Math.floor(100000 + Math.random() * 900000));
+    return String(Math.floor(100000 + Math.random() * 900000));
   }
 
   private otpKey(email: string) {
@@ -57,18 +50,16 @@ export class AuthService {
     this.otpStore.set(this.otpKey(email), otp, 300);
     await this.emailService.sendOtpEmail(email, otp);
 
-    const response: Record<string, unknown> = {
+    if (!this.emailService.isConfigured()) {
+      throw new BadRequestException(
+        'Email service is not configured. Contact support or try again later.',
+      );
+    }
+
+    return {
       message: 'Verification code sent to your email',
       expiresIn: 300,
     };
-    if (this.isDevOtpMode()) {
-      response.devOtp = otp;
-    } else if (!this.emailService.isConfigured()) {
-      response.devOtp = otp;
-      response.message =
-        'SMTP not configured — use the code below (development only)';
-    }
-    return response;
   }
 
   /** Email + password → sends OTP to email (registers new users). */

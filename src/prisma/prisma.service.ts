@@ -14,12 +14,7 @@ export class PrismaService
       await this.$connect();
       this.dbReady = true;
     } catch (error) {
-      if (process.env.ADMIN_DEV_MODE === 'true') {
-        this.logger.warn(
-          'PostgreSQL unavailable — ADMIN_DEV_MODE enabled. Admin APIs use in-memory demo data.',
-        );
-        return;
-      }
+      this.logger.error('PostgreSQL connection failed', error);
       throw error;
     }
   }

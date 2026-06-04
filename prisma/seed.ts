@@ -175,7 +175,7 @@ async function main() {
   });
 
   console.log('Seed completed');
-  console.log('Demo customer login (email OTP: 123456 in dev):');
+  console.log('Demo customer login (OTP sent to email when SMTP is configured):');
   console.log('  Email: demo@liftoo.in');
   console.log('  Password: demo123');
   console.log(`  Legacy phones (assistants): ${assistant1Phone}, ${assistant2Phone}`);

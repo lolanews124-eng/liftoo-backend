@@ -56,10 +56,10 @@ export class PlatformSettingsService implements OnModuleInit {
       id: 'default',
       matchRadiusKm: Number(this.config.get('MATCH_RADIUS_KM', 15)),
       signupWalletBonus: Number(this.config.get('SIGNUP_WALLET_BONUS', 500)),
-      referralRewardAmount: Number(this.config.get('REFERRAL_REWARD_AMOUNT', 100)),
+      referralRewardAmount: 0,
       assistantEarningPercent: Number(this.config.get('ASSISTANT_EARNING_PERCENT', 80)),
       matchBatchSize: Number(this.config.get('MATCH_BATCH_SIZE', 3)),
-      platformFeePercent: Number(this.config.get('PLATFORM_FEE_PERCENT', 10)),
+      platformFeePercent: 0,
       bookingSearchTimeoutMin: Number(this.config.get('BOOKING_SEARCH_TIMEOUT_MIN', 15)),
       cancellationFreeBeforeMin: Number(this.config.get('CANCELLATION_FREE_BEFORE_MIN', 60)),
       cancellationFeePercent: Number(this.config.get('CANCELLATION_FEE_PERCENT', 10)),
@@ -153,6 +153,17 @@ export class PlatformSettingsService implements OnModuleInit {
     };
   }
 
+  /** True when admin saved settings (flag or legacy row with real values in DB). */
+  private isSavedInDatabase(row: {
+    settingsConfigured: boolean;
+    matchRadiusKm: number;
+    matchBatchSize: number;
+    bookingSearchTimeoutMin: number;
+  }): boolean {
+    if (row.settingsConfigured) return true;
+    return row.matchRadiusKm > 0 && row.matchBatchSize > 0 && row.bookingSearchTimeoutMin > 0;
+  }
+
   async ensureDefaults() {
     if (!this.prisma.dbReady) {
       this.cache = this.defaults();
@@ -183,27 +194,36 @@ export class PlatformSettingsService implements OnModuleInit {
     await this.refreshCache();
   }
 
-  async refreshCache() {
+  async refreshCache(): Promise<PlatformSettingsData> {
     if (!this.prisma.dbReady) {
       this.cache = this.defaults();
       return this.cache;
     }
-    const row = await this.prisma.platformSettings.findUnique({ where: { id: 'default' } });
+    let row = await this.prisma.platformSettings.findUnique({ where: { id: 'default' } });
     if (!row) {
       await this.ensureDefaults();
-      return this.get();
+      row = await this.prisma.platformSettings.findUnique({ where: { id: 'default' } });
+      if (!row) {
+        this.cache = this.defaults();
+        return this.cache;
+      }
     }
-    if (!row.settingsConfigured) {
-      this.cache = this.defaults();
+    if (this.isSavedInDatabase(row)) {
+      if (!row.settingsConfigured) {
+        await this.prisma.platformSettings.update({
+          where: { id: 'default' },
+          data: { settingsConfigured: true },
+        });
+      }
+      this.cache = this.rowToRuntime(row);
       return this.cache;
     }
-    this.cache = this.rowToRuntime(row);
+    this.cache = this.defaults();
     return this.cache;
   }
 
-  /** Used by app/API — env defaults apply until admin has saved settings. */
+  /** Used by app/API — reads saved DB values; env defaults only before first admin save. */
   async get(): Promise<PlatformSettingsData> {
-    if (this.cache) return this.cache;
     return this.refreshCache();
   }
 
@@ -235,7 +255,7 @@ export class PlatformSettingsService implements OnModuleInit {
       data: { ...data, settingsConfigured: true },
     });
     this.cache = this.rowToRuntime(updated);
-    return this.rowToAdmin(updated);
+    return this.rowToAdmin({ ...updated, settingsConfigured: true });
   }
 
   async generateAssistantCode(): Promise<string> {
