@@ -224,10 +224,10 @@ export class PlatformSettingsService implements OnModuleInit {
   async update(data: Partial<Omit<PlatformSettingsData, 'id'>>) {
     if (!this.prisma.dbReady) {
       this.cache = { ...this.defaults(), ...this.cache, ...data };
+      const cached = this.cache!;
       return this.rowToAdmin({
-        id: 'default',
+        ...cached,
         settingsConfigured: true,
-        ...this.cache,
       });
     }
     const updated = await this.prisma.platformSettings.update({
