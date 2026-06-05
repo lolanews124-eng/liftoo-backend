@@ -39,6 +39,10 @@ export class AuthService {
     return `otp:email:${email}`;
   }
 
+  private resetOtpKey(email: string) {
+    return `otp:reset:${email}`;
+  }
+
   private async sendEmailOtp(email: string) {
     const rateKey = `otp:rate:${email}`;
     const attempts = this.otpStore.incr(rateKey, 60);
@@ -271,6 +275,49 @@ export class AuthService {
       ...tokens,
       user: await this.usersService.getProfile(userId),
     };
+  }
+
+  async sendPasswordResetOtp(email: string) {
+    const normalized = this.normalizeEmail(email);
+    const user = await this.prisma.user.findUnique({ where: { email: normalized } });
+
+    if (user?.passwordHash) {
+      const rateKey = `otp:reset-rate:${normalized}`;
+      const attempts = this.otpStore.incr(rateKey, 60);
+      if (attempts > 5) {
+        throw new BadRequestException('Too many reset requests. Try again later.');
+      }
+
+      const otp = this.generateOtp();
+      this.otpStore.set(this.resetOtpKey(normalized), otp, 300);
+      await this.emailService.sendPasswordResetEmail(normalized, otp);
+    }
+
+    return {
+      message: 'If an account exists, a reset code has been sent to your email',
+      expiresIn: 300,
+    };
+  }
+
+  async resetPassword(email: string, otp: string, newPassword: string) {
+    const normalized = this.normalizeEmail(email);
+    const stored = this.otpStore.get(this.resetOtpKey(normalized));
+    if (!stored || stored !== otp) {
+      throw new UnauthorizedException('Invalid or expired reset code');
+    }
+    this.otpStore.del(this.resetOtpKey(normalized));
+
+    const user = await this.prisma.user.findUnique({ where: { email: normalized } });
+    if (!user || !user.passwordHash) {
+      throw new UnauthorizedException('Account not found');
+    }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash: hashPassword(newPassword) },
+    });
+
+    return { message: 'Password updated successfully' };
   }
 
   async refreshToken(refreshToken: string) {

@@ -8,7 +8,7 @@ export class HomeFeedAdsController {
   /** Public — active home banner for mobile app. */
   @Get('ad')
   async getActive() {
-    const ad = await this.ads.getActiveForApp();
-    return { ad };
+    const ads = await this.ads.listActiveForApp();
+    return { ads, ad: ads[0] ?? null };
   }
 }

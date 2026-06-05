@@ -32,6 +32,18 @@ export class EmailService implements OnModuleInit {
     return !!(host?.trim() && user?.trim() && pass?.trim());
   }
 
+  async sendPasswordResetEmail(to: string, otp: string): Promise<void> {
+    const subject = 'Reset your Liftoo password';
+    const text = `Your Liftoo password reset code is: ${otp}\n\nThis code expires in 5 minutes. Do not share it with anyone.`;
+    const html = `
+      <p>Your Liftoo password reset code is:</p>
+      <p style="font-size:24px;font-weight:bold;letter-spacing:4px;">${otp}</p>
+      <p>This code expires in 5 minutes. Do not share it with anyone.</p>
+      <p style="color:#666;font-size:12px;">If you did not request this, ignore this email.</p>
+    `;
+    await this.sendMail(to, subject, text, html);
+  }
+
   async sendOtpEmail(to: string, otp: string): Promise<void> {
     const subject = 'Your Liftoo verification code';
     const text = `Your Liftoo verification code is: ${otp}\n\nThis code expires in 5 minutes. Do not share it with anyone.`;
@@ -42,9 +54,13 @@ export class EmailService implements OnModuleInit {
       <p style="color:#666;font-size:12px;">If you did not request this, ignore this email.</p>
     `;
 
+    await this.sendMail(to, subject, text, html);
+  }
+
+  private async sendMail(to: string, subject: string, text: string, html: string): Promise<void> {
     if (!this.isConfigured()) {
       const isProd = this.config.get<string>('NODE_ENV') === 'production';
-      this.logger.warn(`SMTP not configured — OTP for ${to}: ${otp}`);
+      this.logger.warn(`SMTP not configured — email for ${to}: ${text}`);
       if (isProd) {
         throw new InternalServerErrorException(
           'Email service is not configured on the server. Please contact support.',
@@ -66,11 +82,11 @@ export class EmailService implements OnModuleInit {
         text,
         html,
       });
-      this.logger.log(`OTP email sent to ${to}`);
+      this.logger.log(`Email sent to ${to}: ${subject}`);
     } catch (error) {
-      this.logger.error(`Failed to send OTP email to ${to}`, error instanceof Error ? error.stack : error);
+      this.logger.error(`Failed to send email to ${to}`, error instanceof Error ? error.stack : error);
       throw new InternalServerErrorException(
-        'Could not send verification email. Please try again in a few minutes or contact support.',
+        'Could not send email. Please try again in a few minutes or contact support.',
       );
     }
   }

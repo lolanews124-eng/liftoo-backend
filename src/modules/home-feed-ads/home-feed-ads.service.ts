@@ -22,14 +22,21 @@ export class HomeFeedAdsService {
     return row;
   }
 
-  /** Active ad shown on customer home (below Refer & Earn). */
-  async getActiveForApp(): Promise<HomeFeedAdPayload | null> {
-    if (!this.prisma.dbReady) return null;
-    const row = await this.prisma.homeFeedAd.findFirst({
+  /** Active ads shown on customer home carousel (below Refer & Earn). */
+  async listActiveForApp(limit = 5): Promise<HomeFeedAdPayload[]> {
+    if (!this.prisma.dbReady) return [];
+    const rows = await this.prisma.homeFeedAd.findMany({
       where: { isActive: true },
       orderBy: [{ sortOrder: 'asc' }, { updatedAt: 'desc' }],
+      take: limit,
     });
-    return row ? this.map(row) : null;
+    return rows.map((row) => this.map(row));
+  }
+
+  /** @deprecated Use listActiveForApp — kept for backward compatibility. */
+  async getActiveForApp(): Promise<HomeFeedAdPayload | null> {
+    const ads = await this.listActiveForApp(1);
+    return ads[0] ?? null;
   }
 
   async listAll() {
@@ -48,9 +55,6 @@ export class HomeFeedAdsService {
     sortOrder?: number;
     isActive?: boolean;
   }) {
-    if (data.isActive) {
-      await this.deactivateAll();
-    }
     return this.prisma.homeFeedAd.create({
       data: {
         title: data.title?.trim() || null,
@@ -77,9 +81,6 @@ export class HomeFeedAdsService {
     }>,
   ) {
     await this.ensureExists(id);
-    if (data.isActive === true) {
-      await this.deactivateAll(id);
-    }
     return this.prisma.homeFeedAd.update({
       where: { id },
       data: {
@@ -98,9 +99,6 @@ export class HomeFeedAdsService {
 
   async setActive(id: string, isActive: boolean) {
     await this.ensureExists(id);
-    if (isActive) {
-      await this.deactivateAll(id);
-    }
     return this.prisma.homeFeedAd.update({
       where: { id },
       data: { isActive },
@@ -110,13 +108,6 @@ export class HomeFeedAdsService {
   async remove(id: string) {
     await this.ensureExists(id);
     return this.prisma.homeFeedAd.delete({ where: { id } });
-  }
-
-  private async deactivateAll(exceptId?: string) {
-    await this.prisma.homeFeedAd.updateMany({
-      where: exceptId ? { id: { not: exceptId } } : {},
-      data: { isActive: false },
-    });
   }
 
   private async ensureExists(id: string) {
