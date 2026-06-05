@@ -87,11 +87,8 @@ export class VerificationService {
       throw new BadRequestException('Invalid document type');
     }
 
-    const noFileTypes: VerificationDocType[] = [
-      VerificationDocType.full_address,
-      VerificationDocType.bank_details,
-    ];
-    const needsFile = !noFileTypes.includes(dto.type);
+    const textOnlyTypes: VerificationDocType[] = [VerificationDocType.full_address];
+    const needsFile = !textOnlyTypes.includes(dto.type);
 
     if (needsFile && !dto.fileUrl) {
       throw new BadRequestException('File is required for this document');
@@ -117,10 +114,24 @@ export class VerificationService {
     }
 
     if (dto.type === VerificationDocType.bank_details) {
-      const account = dto.metadata?.['accountNumber'] as string | undefined;
-      const ifsc = dto.metadata?.['ifsc'] as string | undefined;
-      if (!account?.trim() || !ifsc?.trim()) {
-        throw new BadRequestException('Bank account and IFSC are required');
+      const meta = dto.metadata as {
+        accountHolderName?: string;
+        bankName?: string;
+        accountNumber?: string;
+        ifsc?: string;
+      } | null;
+      if (
+        !meta?.accountHolderName?.trim() ||
+        !meta?.bankName?.trim() ||
+        !meta?.accountNumber?.trim() ||
+        !meta?.ifsc?.trim()
+      ) {
+        throw new BadRequestException(
+          'Account holder name, bank name, account number and IFSC are required',
+        );
+      }
+      if (!dto.fileUrl?.trim()) {
+        throw new BadRequestException('Passbook photo is required');
       }
     }
 

@@ -13,6 +13,7 @@ import {
   VerificationStatus,
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { toAppDateKey } from '../../common/utils/timezone.util';
 import { VerificationService } from '../assistants/verification.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { AuditLogService } from '../../common/services/audit-log.service';
@@ -624,12 +625,12 @@ export class AdminService {
     for (let i = 0; i < days; i++) {
       const d = new Date(start);
       d.setDate(start.getDate() + i);
-      const key = d.toISOString().slice(0, 10);
+      const key = toAppDateKey(d);
       daily[key] = { bookings: 0, revenue: 0, completed: 0 };
     }
 
     for (const b of bookings) {
-      const key = b.createdAt.toISOString().slice(0, 10);
+      const key = toAppDateKey(b.createdAt);
       if (!daily[key]) continue;
       daily[key].bookings += 1;
       if (b.status === BookingStatus.completed) {
