@@ -45,6 +45,11 @@ export class UsersController {
     return this.usersService.updateFcmToken(user.sub, dto.token ?? null);
   }
 
+  @Delete('me')
+  deleteMe(@CurrentUser() user: JwtPayload) {
+    return this.usersService.deleteAccount(user.sub);
+  }
+
   @Get('addresses')
   getAddresses(@CurrentUser() user: JwtPayload) {
     return this.usersService.getAddresses(user.sub);

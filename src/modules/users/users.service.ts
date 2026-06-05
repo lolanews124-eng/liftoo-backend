@@ -1,5 +1,20 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { BookingStatus, UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+
+const ACTIVE_BOOKING_STATUSES: BookingStatus[] = [
+  'pending',
+  'searching',
+  'assigned',
+  'arriving',
+  'started',
+];
 
 const INDIAN_PHONE = /^[6-9]\d{9}$/;
 
@@ -165,5 +180,92 @@ export class UsersService {
     if (profile.selfieVerified) score += 33;
     if (profile.bankVerified) score += 33;
     return score;
+  }
+
+  async deleteAccount(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { wallet: true, availability: true },
+    });
+    if (!user) throw new NotFoundException('User not found');
+    if (user.roles.includes(UserRole.admin)) {
+      throw new ForbiddenException('Admin accounts cannot be deleted from the app');
+    }
+
+    const activeBookings = await this.prisma.booking.count({
+      where: {
+        OR: [
+          { customerId: userId, status: { in: ACTIVE_BOOKING_STATUSES } },
+          { assistantId: userId, status: { in: ACTIVE_BOOKING_STATUSES } },
+        ],
+      },
+    });
+    if (activeBookings > 0) {
+      throw new BadRequestException(
+        'Complete or cancel your active bookings before deleting your account',
+      );
+    }
+
+    const pendingPayouts = await this.prisma.payoutRequest.count({
+      where: { assistantId: userId, status: 'pending' },
+    });
+    if (pendingPayouts > 0) {
+      throw new BadRequestException(
+        'Wait for pending payout requests to be processed before deleting your account',
+      );
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.notification.deleteMany({ where: { userId } });
+      await tx.address.deleteMany({ where: { userId } });
+      await tx.assistantVerificationDocument.deleteMany({ where: { userId } });
+      await tx.supportTicket.deleteMany({ where: { userId } });
+      await tx.appReview.deleteMany({ where: { userId } });
+      await tx.payoutRequest.deleteMany({ where: { assistantId: userId } });
+
+      if (user.availability) {
+        await tx.assistantAvailability.delete({ where: { userId } });
+      }
+
+      await tx.user.updateMany({
+        where: { referredById: userId },
+        data: { referredById: null },
+      });
+
+      if (user.wallet && user.wallet.balance > 0) {
+        await tx.walletTransaction.create({
+          data: {
+            walletId: user.wallet.id,
+            type: 'debit',
+            amount: user.wallet.balance,
+            description: 'Account deletion — wallet balance forfeited',
+          },
+        });
+        await tx.wallet.update({
+          where: { id: user.wallet.id },
+          data: { balance: 0 },
+        });
+      }
+
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          name: 'Deleted User',
+          email: null,
+          phone: null,
+          passwordHash: null,
+          avatarUrl: null,
+          fcmToken: null,
+          referralCode: null,
+          referredById: null,
+          roles: [],
+          activeRole: null,
+          emailVerified: false,
+          isSuspended: true,
+        },
+      });
+    });
+
+    return { deleted: true };
   }
 }
