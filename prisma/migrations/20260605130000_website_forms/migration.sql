@@ -1,11 +1,18 @@
--- CreateEnum
-CREATE TYPE "WebsiteInquiryStatus" AS ENUM ('new', 'read', 'replied', 'closed');
+-- CreateEnum (idempotent — safe if a previous deploy attempt already created these)
+DO $$ BEGIN
+    CREATE TYPE "WebsiteInquiryStatus" AS ENUM ('new', 'read', 'replied', 'closed');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 
--- CreateEnum
-CREATE TYPE "AssistantApplicationStatus" AS ENUM ('new', 'contacted', 'approved', 'rejected');
+DO $$ BEGIN
+    CREATE TYPE "AssistantApplicationStatus" AS ENUM ('new', 'contacted', 'approved', 'rejected');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 
 -- CreateTable
-CREATE TABLE "website_contact_inquiries" (
+CREATE TABLE IF NOT EXISTS "website_contact_inquiries" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "email" TEXT NOT NULL,
@@ -20,7 +27,7 @@ CREATE TABLE "website_contact_inquiries" (
 );
 
 -- CreateTable
-CREATE TABLE "assistant_applications" (
+CREATE TABLE IF NOT EXISTS "assistant_applications" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "phone" TEXT NOT NULL,
@@ -36,7 +43,7 @@ CREATE TABLE "assistant_applications" (
 );
 
 -- CreateIndex
-CREATE INDEX "website_contact_inquiries_status_created_at_idx" ON "website_contact_inquiries"("status", "created_at");
+CREATE INDEX IF NOT EXISTS "website_contact_inquiries_status_created_at_idx" ON "website_contact_inquiries"("status", "created_at");
 
 -- CreateIndex
-CREATE INDEX "assistant_applications_status_created_at_idx" ON "assistant_applications"("status", "created_at");
+CREATE INDEX IF NOT EXISTS "assistant_applications_status_created_at_idx" ON "assistant_applications"("status", "created_at");
