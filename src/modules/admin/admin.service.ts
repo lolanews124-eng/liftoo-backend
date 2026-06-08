@@ -40,9 +40,19 @@ import {
   AdminBroadcastNotificationDto,
   CreateHomeFeedAdDto,
   UpdateHomeFeedAdDto,
+  CreateHomeHeroSlideDto,
+  UpdateHomeHeroSlideDto,
 } from './dto/admin.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 import { HomeFeedAdsService } from '../home-feed-ads/home-feed-ads.service';
+import { HomeHeroSlidesService } from '../home-hero-slides/home-hero-slides.service';
+import { WebsiteService } from '../website/website.service';
+import { UpdateAssistantApplicationDto } from '../website/dto/update-assistant-application.dto';
+import { UpdateWebsiteInquiryDto } from '../website/dto/update-website-inquiry.dto';
+import {
+  AssistantApplicationStatus,
+  WebsiteInquiryStatus,
+} from '@prisma/client';
 
 @Injectable()
 export class AdminService {
@@ -56,6 +66,8 @@ export class AdminService {
     private support: SupportService,
     private notifications: NotificationsService,
     private homeFeedAds: HomeFeedAdsService,
+    private homeHeroSlides: HomeHeroSlidesService,
+    private website: WebsiteService,
   ) {}
 
 
@@ -79,6 +91,8 @@ export class AdminService {
       pendingPayouts,
       pendingPayments,
       openSupportTickets,
+      newWebsiteInquiries,
+      newAssistantApplications,
     ] = await Promise.all([
       this.prisma.user.count({ where: { roles: { has: UserRole.customer } } }),
       this.prisma.user.count({ where: { roles: { has: UserRole.assistant } } }),
@@ -121,6 +135,8 @@ export class AdminService {
       this.prisma.supportTicket.count({
         where: { status: { in: ['open', 'in_progress'] } },
       }),
+      this.website.countNewContactInquiries(),
+      this.website.countNewAssistantApplications(),
     ]);
 
     const recentBookings = await this.prisma.booking.findMany({
@@ -151,8 +167,26 @@ export class AdminService {
       },
       pendingPayments,
       openSupportTickets,
+      newWebsiteInquiries,
+      newAssistantApplications,
       recentBookings,
     };
+  }
+
+  listWebsiteContactInquiries(status?: WebsiteInquiryStatus) {
+    return this.website.listContactInquiries(status);
+  }
+
+  updateWebsiteContactInquiry(id: string, dto: UpdateWebsiteInquiryDto) {
+    return this.website.updateContactInquiry(id, dto);
+  }
+
+  listAssistantApplications(status?: AssistantApplicationStatus) {
+    return this.website.listAssistantApplications(status);
+  }
+
+  updateAssistantApplication(id: string, dto: UpdateAssistantApplicationDto) {
+    return this.website.updateAssistantApplication(id, dto);
   }
 
   async listUsers(query: AdminUsersQueryDto) {
@@ -827,6 +861,34 @@ export class AdminService {
   async deleteHomeFeedAd(adminId: string, id: string) {
     await this.homeFeedAds.remove(id);
     await this.auditLog.log(adminId, 'delete', 'home_feed_ad', id);
+    return { deleted: true };
+  }
+
+  listHomeHeroSlides() {
+    return this.homeHeroSlides.listAll();
+  }
+
+  async createHomeHeroSlide(adminId: string, dto: CreateHomeHeroSlideDto) {
+    const slide = await this.homeHeroSlides.create(dto);
+    await this.auditLog.log(adminId, 'create', 'home_hero_slide', slide.id);
+    return slide;
+  }
+
+  async updateHomeHeroSlide(adminId: string, id: string, dto: UpdateHomeHeroSlideDto) {
+    const slide = await this.homeHeroSlides.update(id, dto);
+    await this.auditLog.log(adminId, 'update', 'home_hero_slide', id);
+    return slide;
+  }
+
+  async toggleHomeHeroSlide(adminId: string, id: string, isActive: boolean) {
+    const slide = await this.homeHeroSlides.setActive(id, isActive);
+    await this.auditLog.log(adminId, isActive ? 'activate' : 'deactivate', 'home_hero_slide', id);
+    return slide;
+  }
+
+  async deleteHomeHeroSlide(adminId: string, id: string) {
+    await this.homeHeroSlides.remove(id);
+    await this.auditLog.log(adminId, 'delete', 'home_hero_slide', id);
     return { deleted: true };
   }
 }

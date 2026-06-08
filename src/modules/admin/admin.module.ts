@@ -9,9 +9,20 @@ import { PayoutsModule } from '../payouts/payouts.module';
 import { SupportModule } from '../support/support.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { HomeFeedAdsModule } from '../home-feed-ads/home-feed-ads.module';
+import { HomeHeroSlidesModule } from '../home-hero-slides/home-hero-slides.module';
+import { WebsiteModule } from '../website/website.module';
 
 @Module({
-  imports: [AssistantsModule, PromosModule, PayoutsModule, SupportModule, NotificationsModule, HomeFeedAdsModule],
+  imports: [
+    AssistantsModule,
+    PromosModule,
+    PayoutsModule,
+    SupportModule,
+    NotificationsModule,
+    HomeFeedAdsModule,
+    HomeHeroSlidesModule,
+    WebsiteModule,
+  ],
   controllers: [AdminController],
   providers: [AdminService, AdminAuthService, AuditLogService],
 })

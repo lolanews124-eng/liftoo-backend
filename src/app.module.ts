@@ -24,6 +24,8 @@ import { ChatModule } from './modules/chat/chat.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { GeocodeModule } from './modules/geocode/geocode.module';
 import { HomeFeedAdsModule } from './modules/home-feed-ads/home-feed-ads.module';
+import { HomeHeroSlidesModule } from './modules/home-hero-slides/home-hero-slides.module';
+import { WebsiteModule } from './modules/website/website.module';
 
 @Module({
   imports: [
@@ -60,6 +62,8 @@ import { HomeFeedAdsModule } from './modules/home-feed-ads/home-feed-ads.module'
     UploadModule,
     GeocodeModule,
     HomeFeedAdsModule,
+    HomeHeroSlidesModule,
+    WebsiteModule,
   ],
 })
 export class AppModule {}

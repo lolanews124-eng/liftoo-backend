@@ -78,6 +78,20 @@ enum SupportTicketStatus {
   closed
 }
 
+enum WebsiteInquiryStatus {
+  new
+  read
+  replied
+  closed
+}
+
+enum AssistantApplicationStatus {
+  new
+  contacted
+  approved
+  rejected
+}
+
 enum PromoDiscountType {
   fixed
   percent
@@ -439,6 +453,22 @@ model HomeFeedAd {
   @@map("home_feed_ads")
 }
 
+model HomeHeroSlide {
+  id          String   @id @default(uuid())
+  tag         String
+  title       String
+  subtitle    String
+  ctaLabel    String   @map("cta_label")
+  imageUrl    String   @map("image_url")
+  accentColor String?  @map("accent_color")
+  isActive    Boolean  @default(false) @map("is_active")
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("home_hero_slides")
+}
+
 model PlatformSettings {
   id                     String   @id @default("default")
   matchRadiusKm          Float    @default(15) @map("match_radius_km")
@@ -541,4 +571,35 @@ model AdminBroadcast {
 
   @@index([createdAt])
   @@map("admin_broadcasts")
+}
+
+model WebsiteContactInquiry {
+  id        String               @id @default(uuid())
+  name      String
+  email     String
+  phone     String
+  message   String
+  status    WebsiteInquiryStatus @default(new)
+  adminNote String?              @map("admin_note")
+  createdAt DateTime             @default(now()) @map("created_at")
+  updatedAt DateTime             @updatedAt @map("updated_at")
+
+  @@index([status, createdAt])
+  @@map("website_contact_inquiries")
+}
+
+model AssistantApplication {
+  id        String                     @id @default(uuid())
+  name      String
+  phone     String
+  email     String?
+  city      String                     @default("Patna")
+  message   String?
+  status    AssistantApplicationStatus @default(new)
+  adminNote String?                    @map("admin_note")
+  createdAt DateTime                   @default(now()) @map("created_at")
+  updatedAt DateTime                   @updatedAt @map("updated_at")
+
+  @@index([status, createdAt])
+  @@map("assistant_applications")
 }

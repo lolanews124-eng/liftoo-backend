@@ -36,7 +36,11 @@ import {
   AdminBroadcastNotificationDto,
   CreateHomeFeedAdDto,
   UpdateHomeFeedAdDto,
+  CreateHomeHeroSlideDto,
+  UpdateHomeHeroSlideDto,
 } from './dto/admin.dto';
+import { UpdateAssistantApplicationDto } from '../website/dto/update-assistant-application.dto';
+import { UpdateWebsiteInquiryDto } from '../website/dto/update-website-inquiry.dto';
 
 @Controller('api/v1/admin')
 export class AdminController {
@@ -255,6 +259,44 @@ export class AdminController {
     return this.adminService.deleteHomeFeedAd(adminId, id);
   }
 
+  @Get('home-hero-slides')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  listHomeHeroSlides() {
+    return this.adminService.listHomeHeroSlides();
+  }
+
+  @Post('home-hero-slides')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  createHomeHeroSlide(@CurrentUser('sub') adminId: string, @Body() dto: CreateHomeHeroSlideDto) {
+    return this.adminService.createHomeHeroSlide(adminId, dto);
+  }
+
+  @Patch('home-hero-slides/:id')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  updateHomeHeroSlide(
+    @CurrentUser('sub') adminId: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateHomeHeroSlideDto,
+  ) {
+    return this.adminService.updateHomeHeroSlide(adminId, id, dto);
+  }
+
+  @Patch('home-hero-slides/:id/toggle')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  toggleHomeHeroSlide(
+    @CurrentUser('sub') adminId: string,
+    @Param('id') id: string,
+    @Body('isActive') isActive: boolean,
+  ) {
+    return this.adminService.toggleHomeHeroSlide(adminId, id, isActive);
+  }
+
+  @Delete('home-hero-slides/:id')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  deleteHomeHeroSlide(@CurrentUser('sub') adminId: string, @Param('id') id: string) {
+    return this.adminService.deleteHomeHeroSlide(adminId, id);
+  }
+
   @Get('settings')
   @UseGuards(JwtAuthGuard, AdminGuard)
   getSettings() {
@@ -356,5 +398,35 @@ export class AdminController {
   @UseGuards(JwtAuthGuard, AdminGuard)
   listNotificationBroadcasts(@Query() query: PaginationQueryDto) {
     return this.adminService.listNotificationBroadcasts(query);
+  }
+
+  @Get('website/contact-inquiries')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  listWebsiteContactInquiries(@Query('status') status?: string) {
+    return this.adminService.listWebsiteContactInquiries(status as never);
+  }
+
+  @Patch('website/contact-inquiries/:id')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  updateWebsiteContactInquiry(
+    @Param('id') id: string,
+    @Body() dto: UpdateWebsiteInquiryDto,
+  ) {
+    return this.adminService.updateWebsiteContactInquiry(id, dto);
+  }
+
+  @Get('website/assistant-applications')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  listAssistantApplications(@Query('status') status?: string) {
+    return this.adminService.listAssistantApplications(status as never);
+  }
+
+  @Patch('website/assistant-applications/:id')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  updateAssistantApplication(
+    @Param('id') id: string,
+    @Body() dto: UpdateAssistantApplicationDto,
+  ) {
+    return this.adminService.updateAssistantApplication(id, dto);
   }
 }

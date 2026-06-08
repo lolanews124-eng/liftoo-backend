@@ -375,6 +375,89 @@ export class UpdateHomeFeedAdDto {
   isActive?: boolean;
 }
 
+export class CreateHomeHeroSlideDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(40)
+  tag: string;
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(120)
+  title: string;
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(200)
+  subtitle: string;
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(40)
+  ctaLabel: string;
+
+  @IsString()
+  imageUrl: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  accentColor?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  sortOrder?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+}
+
+export class UpdateHomeHeroSlideDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(40)
+  tag?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(120)
+  title?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(200)
+  subtitle?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(40)
+  ctaLabel?: string;
+
+  @IsOptional()
+  @IsString()
+  imageUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  accentColor?: string | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  sortOrder?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+}
+
 export class AdminBroadcastNotificationDto {
   @IsEnum(BroadcastAudience)
   audience: BroadcastAudience;
