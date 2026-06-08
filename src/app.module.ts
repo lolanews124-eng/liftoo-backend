@@ -26,6 +26,7 @@ import { GeocodeModule } from './modules/geocode/geocode.module';
 import { HomeFeedAdsModule } from './modules/home-feed-ads/home-feed-ads.module';
 import { HomeHeroSlidesModule } from './modules/home-hero-slides/home-hero-slides.module';
 import { WebsiteModule } from './modules/website/website.module';
+import { HealthModule } from './modules/health/health.module';
 
 @Module({
   imports: [
@@ -64,6 +65,7 @@ import { WebsiteModule } from './modules/website/website.module';
     HomeFeedAdsModule,
     HomeHeroSlidesModule,
     WebsiteModule,
+    HealthModule,
   ],
 })
 export class AppModule {}
