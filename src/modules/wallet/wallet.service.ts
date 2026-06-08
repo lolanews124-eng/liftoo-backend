@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Inject, forwardRef } from '@nestjs/common';
+import { BadRequestException, Injectable, Inject, forwardRef, ServiceUnavailableException } from '@nestjs/common';
 import { WalletTransactionType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -91,6 +91,14 @@ export class WalletService {
   }
 
   async topUp(userId: string, amount: number, method = 'upi') {
+    if (process.env.WALLET_TOPUP_ENABLED !== 'true') {
+      throw new ServiceUnavailableException(
+        'Wallet top-up is temporarily unavailable until payment gateway integration is live.',
+      );
+    }
+    if (amount <= 0) {
+      throw new BadRequestException('Invalid amount');
+    }
     const label = method === 'card' ? 'Card' : 'UPI';
     const wallet = await this.credit(userId, amount, `Wallet top-up via ${label}`);
     const full = await this.getWallet(userId);
