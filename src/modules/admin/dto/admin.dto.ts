@@ -29,6 +29,16 @@ export class AdminLoginDto {
   password: string;
 }
 
+export class ChangeAdminPasswordDto {
+  @IsString()
+  @MinLength(6)
+  currentPassword: string;
+
+  @IsString()
+  @MinLength(8)
+  newPassword: string;
+}
+
 export class PaginationQueryDto {
   @IsOptional()
   @Type(() => Number)

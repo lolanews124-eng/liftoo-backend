@@ -4,7 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { hashPassword, verifyPassword } from '../../common/utils/password.util';
-import { AdminLoginDto } from './dto/admin.dto';
+import { AdminLoginDto, ChangeAdminPasswordDto } from './dto/admin.dto';
 
 @Injectable()
 export class AdminAuthService {
@@ -53,6 +53,30 @@ export class AdminAuthService {
       throw new UnauthorizedException();
     }
     return this.toAdminUser(user);
+  }
+
+  async changePassword(adminId: string, dto: ChangeAdminPasswordDto) {
+    this.assertDbReady();
+
+    const user = await this.prisma.user.findUnique({ where: { id: adminId } });
+    if (!user || !user.passwordHash || !user.roles.includes(UserRole.admin) || user.isSuspended) {
+      throw new UnauthorizedException('Unauthorized');
+    }
+
+    if (!verifyPassword(dto.currentPassword, user.passwordHash)) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    if (dto.currentPassword === dto.newPassword) {
+      return { message: 'Password unchanged' };
+    }
+
+    await this.prisma.user.update({
+      where: { id: adminId },
+      data: { passwordHash: hashPassword(dto.newPassword) },
+    });
+
+    return { message: 'Password updated successfully' };
   }
 
   static hashPassword(password: string) {

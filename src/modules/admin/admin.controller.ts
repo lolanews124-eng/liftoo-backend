@@ -18,6 +18,7 @@ import { CurrentUser, JwtPayload } from '../../common/decorators/current-user.de
 import {
   AdminBookingsQueryDto,
   AdminLoginDto,
+  ChangeAdminPasswordDto,
   AdminReviewVerificationDto,
   AdminUsersQueryDto,
   AdminVerificationsQueryDto,
@@ -58,6 +59,12 @@ export class AdminController {
   @UseGuards(JwtAuthGuard, AdminGuard)
   me(@CurrentUser('sub') userId: string) {
     return this.adminAuth.me(userId);
+  }
+
+  @Post('auth/change-password')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  changePassword(@CurrentUser('sub') adminId: string, @Body() dto: ChangeAdminPasswordDto) {
+    return this.adminAuth.changePassword(adminId, dto);
   }
 
   @Get('dashboard/stats')
